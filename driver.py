@@ -4,8 +4,9 @@ from spectre import SpectreState
 
 import angr
 import claripy
-import logging
 import monkeyhex
+import logging
+l = logging.getLogger(name=__name__)
 
 logging.getLogger('angr.engines').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.vex.expressions').setLevel(logging.INFO)
@@ -13,7 +14,8 @@ logging.getLogger('angr.engines').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.hook').setLevel(logging.INFO)
 logging.getLogger('angr.state_plugins.symbolic_memory').setLevel(logging.DEBUG)
 logging.getLogger('specvex').setLevel(logging.DEBUG)
-logging.getLogger('boundstracking').setLevel(logging.DEBUG)
+logging.getLogger('spectre').setLevel(logging.DEBUG)
+logging.getLogger(__name__).setLevel(logging.INFO)
 
 def fauxware():
     proj = angr.Project('../angr-binaries/tests/x86_64/fauxware')
@@ -111,23 +113,27 @@ class SpectreViolationFilter(angr.exploration_techniques.ExplorationTechnique):
     return simgr.filter(state, **kwargs)
 
 def runSpec(s):
+    l.info("Running Kocher test case {} with speculative execution".format(s))
     proj,state = kocher(s)
     armSpectreChecks(proj,state)
     makeSpeculative(proj,state)
     return runState(proj,state)
 
 def runNotSpec(s):
+    l.info("Running Kocher test case {} without speculative execution".format(s))
     proj,state = kocher(s)
     armSpectreChecks(proj,state)
     return runState(proj,state)
 
 def run11Spec(s):
+    l.info("Running Kocher test case 11{} with speculative execution".format(s))
     proj,state = kocher11(s)
     armSpectreChecks(proj,state)
     makeSpeculative(proj,state)
     return runState(proj,state)
 
 def run11NotSpec(s):
+    l.info("Running Kocher test case 11{} without speculative execution".format(s))
     proj,state = kocher11(s)
     armSpectreChecks(proj,state)
     return runState(proj,state)
@@ -143,6 +149,10 @@ def runallNotSpec():
       {('11'+s):run11NotSpec(s) for s in ['gcc','ker','sub']})
 
 def alltests():
+    logging.getLogger('angr.engines').setLevel(logging.WARNING)
+    logging.getLogger('angr.state_plugins.symbolic_memory').setLevel(logging.WARNING)
+    logging.getLogger('specvex').setLevel(logging.WARNING)
+    logging.getLogger('spectre').setLevel(logging.WARNING)
     notspec = runallNotSpec()
     spec = runallSpec()
     def violationDetected(simgr):
