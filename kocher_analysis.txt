@@ -1,0 +1,26 @@
+01: we pass
+02: we pass
+03: we pass
+04: this really does leak secret information (off the end of array1) without
+    speculative execution, that is, even obeying the bounds check.
+05: we pass
+06: we pass
+07: we pass
+08: this uses a ternary which compiles to a cmov. We don't speculate on cmovs,
+    they are secure. So this really should be no violation detected.
+09: this really does leak secret information without speculative execution,
+    that is, even obeying the bounds check, because the attacker controls the
+    bounds check.
+10: relies on flagging tainted branches (TODO)
+11: we pass
+12: we pass
+13: we pass
+14: Like 04, this really does leak secret information (off the end of array1)
+    without speculative execution, that is, even obeying the bounds check.
+15: this false positive in the non-speculative case is because uninitialized
+    memory indeed could affect an address calculation, the thing is that the
+    existing constraints (the bounds check) constrain what the uninitialized
+    memory could be on the relevant path. To fix this, instead of just looking
+    for tainted or uninitialized data _anywhere in the AST_ of an address,
+    we would have to actually invoke the solver to see if the address could
+    be resolved *in a way that genuinely leaks the tainted/uninitialized data*.
