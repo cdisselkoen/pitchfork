@@ -77,12 +77,17 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             exit_state.spec.append(branchcond)
             cont_state.spec.append(notbranchcond)
 
-            # TODO: add_guard=False seemed to not be sufficient, so I also replaced s_stmt.guard with claripy.BVV(1,1) (intended to be True)
-            successors.add_successor(exit_state, s_stmt.target, claripy.BVV(1,1), s_stmt.jumpkind, add_guard=False,
+            successors.add_successor(exit_state, s_stmt.target, s_stmt.guard, s_stmt.jumpkind, add_guard=False,
                                     exit_stmt_idx=state.scratch.stmt_idx, exit_ins_addr=state.scratch.ins_addr)
 
-            # since add_successor above will do the equivalent for exit_state, might as well keep this here to keep exit_state and cont_state equivalent
-            # TODO not sure if this will mess us up. Is scratch.guard used for merging? Haven't thought about how speculation should interact with merging
+            # We don't add the guard for the exit_state (add_guard=False).
+            # Unfortunately, the call to add the 'default' successor at the end of an irsb
+            # (line 311 in vex/engine.py as of this writing) leaves add_guard as default (True).
+            # For the moment, rather than patching this, we just don't record the guard at
+            # all on the cont_state.
+            # TODO not sure if this will mess us up. Is scratch.guard used for merging?
+            # Haven't thought about how speculation should interact with merging.
+            # More fundamentally, what is scratch.guard used for when add_guard=False? Anything?
             #cont_state.scratch.guard = claripy.And(cont_state.scratch.guard, notbranchcond)
 
         return True
