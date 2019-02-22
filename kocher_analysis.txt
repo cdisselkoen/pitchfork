@@ -11,7 +11,7 @@
 09: this really does leak secret information without speculative execution,
     that is, even obeying the bounds check, because the attacker controls the
     bounds check.
-10: relies on flagging tainted branches (TODO)
+10: we pass
 11: we pass
 12: we pass
 13: we pass

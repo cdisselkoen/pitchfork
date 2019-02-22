@@ -1,5 +1,6 @@
 import angr
 import claripy
+import pyvex
 
 from oob import OOBStrategy
 
@@ -27,6 +28,7 @@ class SpectreState(angr.SimStatePlugin):
         """
         state.inspect.b('mem_read',  when=angr.BP_AFTER, condition=_tainted_read, action=detected_spectre_read)
         state.inspect.b('mem_write', when=angr.BP_AFTER, condition=_tainted_write, action=detected_spectre_write)
+        state.inspect.b('exit', when=angr.BP_BEFORE, condition=_tainted_branch, action=detected_spectre_branch)
 
         state.memory.read_strategies.insert(0, OOBStrategy())
         state.memory.write_strategies.insert(0, OOBStrategy())
@@ -67,6 +69,10 @@ def _tainted_write(state):
     addr = state.inspect.mem_write_address
     return _is_tainted(state, addr)
 
+# Call during a breakpoint callback on 'exit' (i.e. conditional branch)
+def _tainted_branch(state):
+    return _is_tainted(state, state.inspect.exit_guard)
+
 def _is_tainted(state, ast):
     l.debug("checking if {} (with annotations {} and leaves {}) is tainted".format(ast, ast.annotations, list(state.solver.leaves(ast))))
     #assert isinstance(state.solver, MySolver)
@@ -84,6 +90,11 @@ def detected_spectre_write(state):
     print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Address {}\n  Value {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
         state.inspect.mem_write_address, state.inspect.mem_write_expr, state.globals['args'], state.solver.constraints, state.inspect.mem_write_expr.annotations))
     state.spectre.violation = (state.inspect.mem_write_address, state.inspect.mem_write_expr)
+
+def detected_spectre_branch(state):
+    print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
+        hex(state.addr), state.inspect.exit_target, state.inspect.exit_guard, state.globals['args'], state.solver.constraints, state.inspect.exit_guard.annotations))
+    state.spectre.violation = (state.addr, state.inspect.exit_target, state.inspect.exit_guard)
 
 class TaintedAnnotation(claripy.Annotation):
     """
