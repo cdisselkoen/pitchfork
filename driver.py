@@ -26,10 +26,16 @@ def kocher(s):
     Kocher test case.
     """
     proj = angr.Project('spectector-clang/'+s+'.o')
-    arg = claripy.BVS("x", 64)  # unconstrained
     funcaddr = proj.loader.find_symbol("victim_function_v"+s).rebased_addr
-    state = proj.factory.call_state(funcaddr, arg)
-    state.globals['arg'] = arg
+    if s not in ('09','10','12'):
+      arg_x = claripy.BVS("x", 64)  # unconstrained
+      state = proj.factory.call_state(funcaddr, arg_x)
+      state.globals['args'] = [arg_x]
+    else:
+      arg_x = claripy.BVS("x", 64)  # unconstrained
+      arg_y = claripy.BVS("y", 64)  # unconstrained
+      state = proj.factory.call_state(funcaddr, arg_x, arg_y)
+      state.globals['args'] = [arg_x, arg_y]
     return (proj, state)
 
 def kocher11(s):
@@ -38,10 +44,10 @@ def kocher11(s):
     the Kocher test case '11gcc', '11ker', or '11sub' respectively.
     """
     proj = angr.Project('spectector-clang/11'+s+'.o')
-    arg = claripy.BVS("x", 64)  # unconstrained
     funcaddr = proj.loader.find_symbol("victim_function_v11").rebased_addr
-    state = proj.factory.call_state(funcaddr, arg)
-    state.globals['arg'] = arg
+    arg_x = claripy.BVS("x", 64)  # unconstrained
+    state = proj.factory.call_state(funcaddr, arg_x)
+    state.globals['args'] = [arg_x]
     return (proj, state)
 
 def blatantOOB():

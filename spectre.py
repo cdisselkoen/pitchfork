@@ -76,13 +76,13 @@ def _is_immediately_tainted(ast):
     return ast.uninitialized or any(isinstance(a, TaintedAnnotation) for a in ast.annotations)
 
 def detected_spectre_read(state):
-    print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Address {}\n  Value {}\n  x={}\n  constraints were {}\n  annotations were {}\n".format(
-        state.inspect.mem_read_address, state.inspect.mem_read_expr, state.globals['arg'], state.solver.constraints, state.inspect.mem_read_expr.annotations))
+    print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Address {}\n  Value {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
+        state.inspect.mem_read_address, state.inspect.mem_read_expr, state.globals['args'], state.solver.constraints, state.inspect.mem_read_expr.annotations))
     state.spectre.violation = (state.inspect.mem_read_address, state.inspect.mem_read_expr)
 
 def detected_spectre_write(state):
-    print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Address {}\n  Value {}\n  x={}\n  constraints were {}\n  annotations were {}\n".format(
-        state.inspect.mem_write_address, state.inspect.mem_write_expr, state.globals['arg'], state.solver.constraints, state.inspect.mem_write_expr.annotations))
+    print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Address {}\n  Value {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
+        state.inspect.mem_write_address, state.inspect.mem_write_expr, state.globals['args'], state.solver.constraints, state.inspect.mem_write_expr.annotations))
     state.spectre.violation = (state.inspect.mem_write_address, state.inspect.mem_write_expr)
 
 class TaintedAnnotation(claripy.Annotation):
