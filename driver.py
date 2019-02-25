@@ -12,9 +12,9 @@ logging.getLogger('angr.engines').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.vex.expressions').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.unicorn').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.hook').setLevel(logging.INFO)
-logging.getLogger('angr.state_plugins.symbolic_memory').setLevel(logging.DEBUG)
 logging.getLogger('specvex').setLevel(logging.DEBUG)
 logging.getLogger('spectre').setLevel(logging.DEBUG)
+logging.getLogger('oob').setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.INFO)
 
 def fauxware():
@@ -163,9 +163,9 @@ def runallNotSpec():
 
 def alltests():
     logging.getLogger('angr.engines').setLevel(logging.WARNING)
-    logging.getLogger('angr.state_plugins.symbolic_memory').setLevel(logging.WARNING)
     logging.getLogger('specvex').setLevel(logging.WARNING)
     logging.getLogger('spectre').setLevel(logging.WARNING)
+    logging.getLogger('oob').setLevel(logging.WARNING)
     notspec = runallNotSpec()
     spec = runallSpec()
     def violationDetected(simgr):

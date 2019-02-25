@@ -2,7 +2,7 @@ import angr
 import claripy
 import pyvex
 
-from oob import OOBStrategy, can_be_oob
+from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -32,6 +32,7 @@ class SpectreState(angr.SimStatePlugin):
 
         state.memory.read_strategies.insert(0, OOBStrategy())
         state.memory.write_strategies.insert(0, OOBStrategy())
+        state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
 
         # In the future, this code will be used to replace all 'solver' state plugins with our 'MySolver'
         # but this doesn't work correctly, so for now we just patched angr's SimSolver to provide the leaves() method we need

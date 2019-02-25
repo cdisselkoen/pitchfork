@@ -50,6 +50,8 @@ class OOBState(angr.SimStatePlugin):
 
         state.options.add(angr.options.SYMBOLIC_WRITE_ADDRESSES)
 
+        state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
+
         self._armed = True
 
     def armed(self):
@@ -82,6 +84,17 @@ def get_stack_interval(state):
     sp = state.regs.rsp
     end_of_stack = 0x7fffffffffffffff  # this is an assumption, but I think a good one for ELF programs
     return (sp, end_of_stack)
+
+# Call during a breakpoint callback on 'address_concretization'
+def concretization_succeeded(state):
+    return state.inspect.address_concretization_result is not None
+
+# Call during a breakpoint callback on 'address_concretization'
+def log_concretization(state):
+    def showWithOptAnnotations(x): return "{} (annotations {})".format(hex(x), x.annotations) if isinstance(x, claripy.ast.Base) else "{} (not an AST)".format(hex(x))
+    raw = state.inspect.address_concretization_expr
+    concretized = "[{}]".format(', '.join(showWithOptAnnotations(x) for x in state.inspect.address_concretization_result))
+    l.debug("concretized {} with annotations {} to {}".format(raw, raw.annotations, concretized))
 
 # print a claripy AST as-is, or if it's a Python int, print in hex
 def hexprint(val):
