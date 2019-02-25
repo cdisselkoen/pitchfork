@@ -90,12 +90,6 @@ def runState(proj, state):
     simgr.run()
     return simgr
 
-def showbbVEX(proj, bbaddr):
-    proj.factory.block(bbaddr).vex.pp()
-
-def showbbASM(proj, bbaddr):
-    proj.factory.block(bbaddr).capstone.pp()
-
 class OOBViolationFilter(angr.exploration_techniques.ExplorationTechnique):
   def __init__(self):
     super().__init__()
@@ -111,6 +105,14 @@ class SpectreViolationFilter(angr.exploration_techniques.ExplorationTechnique):
   def filter(self, simgr, state, **kwargs):
     if state.spectre.violation: return 'spectre_violation'
     return simgr.filter(state, **kwargs)
+
+# useful utility for interactive mode
+def showbbASM(proj, bbaddr):
+    proj.factory.block(bbaddr).capstone.pp()
+
+# useful utility for interactive mode
+def showbbVEX(proj, bbaddr):
+    proj.factory.block(bbaddr).vex.pp()
 
 def runSpec(s):
     l.info("Running Kocher test case {} with speculative execution".format(s))
