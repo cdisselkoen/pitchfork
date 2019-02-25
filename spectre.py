@@ -2,7 +2,7 @@ import angr
 import claripy
 import pyvex
 
-from oob import OOBStrategy
+from oob import OOBStrategy, can_be_oob
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -62,12 +62,18 @@ def _tainted_read(state):
     addr = state.inspect.mem_read_address
     expr = state.inspect.mem_read_expr
     l.debug("read {} (with annotations {}) from {} (with annotations {})".format(expr, expr.annotations, addr, addr.annotations))
-    return _is_tainted(state, addr)
+    if _is_tainted(state, addr):
+        return can_be_oob(state, addr, state.inspect.mem_read_length)
+    else:
+        return False
 
 # Call during a breakpoint callback on 'mem_write'
 def _tainted_write(state):
     addr = state.inspect.mem_write_address
-    return _is_tainted(state, addr)
+    if _is_tainted(state, addr):
+        return can_be_oob(state, addr, state.inspect.mem_write_length)
+    else:
+        return False
 
 # Call during a breakpoint callback on 'exit' (i.e. conditional branch)
 def _tainted_branch(state):

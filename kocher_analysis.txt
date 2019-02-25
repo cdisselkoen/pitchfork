@@ -17,10 +17,9 @@
 13: we pass
 14: Like 04, this really does leak secret information (off the end of array1)
     without speculative execution, that is, even obeying the bounds check.
-15: this false positive in the non-speculative case is because uninitialized
-    memory indeed could affect an address calculation, the thing is that the
-    existing constraints (the bounds check) constrain what the uninitialized
-    memory could be on the relevant path. To fix this, instead of just looking
-    for tainted or uninitialized data _anywhere in the AST_ of an address,
-    we would have to actually invoke the solver to see if the address could
-    be resolved *in a way that genuinely leaks the tainted/uninitialized data*.
+15: This really does leak secret information (namely, the value at `*x` for
+    any `x` the attacker passes into the function) even without speculative
+    execution. For instance, the attacker can easily observe whether the
+    bounds check passes or fails, which leaks information about the value of
+    `*x`. Further information about `*x` may be leaked as it is incorporated
+    into the address calculation later on, if the bounds check passes.

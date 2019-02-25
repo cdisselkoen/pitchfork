@@ -42,8 +42,8 @@ class OOBState(angr.SimStatePlugin):
         Setup hooks and breakpoints to perform bounds tracking.
         Also set up concretization to ensure addresses are always made to be OOB when possible.
         """
-        state.inspect.b('mem_read',  when=angr.BP_AFTER, condition=_read_is_oob, action=detected_oob_read)
-        state.inspect.b('mem_write', when=angr.BP_AFTER, condition=_write_is_oob, action=detected_oob_write)
+        state.inspect.b('mem_read',  when=angr.BP_AFTER, condition=_read_can_be_oob, action=detected_oob_read)
+        state.inspect.b('mem_write', when=angr.BP_AFTER, condition=_write_can_be_oob, action=detected_oob_write)
 
         state.memory.read_strategies.insert(0, OOBStrategy())
         state.memory.write_strategies.insert(0, OOBStrategy())
@@ -59,19 +59,19 @@ class OOBState(angr.SimStatePlugin):
         return self._armed
 
 # Call during a breakpoint callback on 'mem_read'
-def _read_is_oob(state):
+def _read_can_be_oob(state):
     addr = state.inspect.mem_read_address
     length = state.inspect.mem_read_length
-    return _is_oob(state, addr, length)
+    return can_be_oob(state, addr, length)
 
 # Call during a breakpoint callback on 'mem_write'
-def _write_is_oob(state):
+def _write_can_be_oob(state):
     addr = state.inspect.mem_write_address
     length = state.inspect.mem_write_length
-    return _is_oob(state, addr, length)
+    return can_be_oob(state, addr, length)
 
-def _is_oob(state, addr, length):
-    l.debug("checking if {} is oob".format(addr))
+def can_be_oob(state, addr, length):
+    l.debug("checking if {} can be oob".format(addr))
     inbounds_intervals = state.oob.inbounds_intervals + [get_stack_interval(state)]
     oob_constraints = [claripy.Or(addr < mn, addr+length > mx) for (mn,mx) in inbounds_intervals]
     if state.solver.satisfiable(extra_constraints=oob_constraints): return True  # there is a solution to current constraints such that the access is OOB
