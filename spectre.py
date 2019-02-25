@@ -80,6 +80,7 @@ def _tainted_branch(state):
     return _is_tainted(state, state.inspect.exit_guard)
 
 def _is_tainted(state, ast):
+    assert isinstance(state.solver, MySolver)
     l.debug("checking if {} (with annotations {} and leaves {}) is tainted".format(ast, ast.annotations, list(state.solver.leaves(ast))))
     #assert isinstance(state.solver, MySolver)
     return _is_immediately_tainted(ast) or any(_is_immediately_tainted(v) for v in state.solver.leaves(ast))
@@ -121,14 +122,6 @@ class MySolver(angr.state_plugins.SimSolver):
     """
     A subclass just to add a single new accessor we need.
     """
-    def __init__(self, simsolver):
-        """
-        Pass the SimSolver instance which you want to turn into a MySolver.
-        """
-        super().__init__(solver = simsolver._stored_solver,
-                          all_variables = simsolver.all_variables,
-                          temporal_tracked_variables = simsolver.temporal_tracked_variables,
-                          eternal_tracked_variables = simsolver.eternal_tracked_variables)
 
     def leaves(self, v):
         """
@@ -140,3 +133,14 @@ class MySolver(angr.state_plugins.SimSolver):
         for var in v.variables:
           if var in reverse_mapping:
             yield reverse_mapping[var]
+
+    # Entirely copied from SimSolver's method, just constructs a MySolver instead of a SimSolver
+    @angr.SimStatePlugin.memo
+    def copy(self, memo):
+        return MySolver(solver=self._solver.branch(),
+                        all_variables=self.all_variables,
+                        temporal_tracked_variables=self.temporal_tracked_variables,
+                        eternal_tracked_variables=self.eternal_tracked_variables)
+
+# use MySolver instances instead of SimSolver
+MySolver.register_default('solver')
