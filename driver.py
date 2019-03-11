@@ -17,6 +17,31 @@ logging.getLogger('spectre').setLevel(logging.DEBUG)
 logging.getLogger('oob').setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.INFO)
 
+def oneArgFuncEntry(proj, funcname, argname='x'):
+    """
+    Get a state ready to enter the given 1-argument function, with the argument
+    as a fully unconstrained 64-bit value. Argname is what to name the argument BVS,
+    if you want a custom name.
+    """
+    funcaddr = proj.loader.find_symbol(funcname).rebased_addr
+    arg = claripy.BVS(argname, 64)  # unconstrained
+    state = proj.factory.call_state(funcaddr, arg)
+    state.globals['args'] = [arg]
+    return state
+
+def nArgFuncEntry(proj, funcname, n, argnames=None):
+    """
+    Get a state ready to enter the given N-argument function, with each argument
+    as a fully unconstrained 64-bit value. Argnames is either None (the default)
+    in which case the argument BVS's get names 'arg1', 'arg2', etc, or an iterable
+    of custom names to use for the argument BVS's
+    """
+    funcaddr = proj.loader.find_symbol(funcname).rebased_addr
+    args = (claripy.BVS("arg{}".format(i) if argnames is None else argnames[i], 64) for i in range(n))
+    state = proj.factory.call_state(funcaddr, *args)
+    state.globals['args'] = args
+    return state
+
 def fauxware():
     proj = angr.Project('../angr-binaries/tests/x86_64/fauxware')
     state = proj.factory.entry_state()
@@ -28,16 +53,11 @@ def kocher(s):
     Kocher test case.
     """
     proj = angr.Project('spectector-clang/'+s+'.o')
-    funcaddr = proj.loader.find_symbol("victim_function_v"+s).rebased_addr
+    funcname = "victim_function_v"+s
     if s not in ('09','10','12'):
-      arg_x = claripy.BVS("x", 64)  # unconstrained
-      state = proj.factory.call_state(funcaddr, arg_x)
-      state.globals['args'] = [arg_x]
+        state = oneArgFuncEntry(proj, funcname)
     else:
-      arg_x = claripy.BVS("x", 64)  # unconstrained
-      arg_y = claripy.BVS("y", 64)  # unconstrained
-      state = proj.factory.call_state(funcaddr, arg_x, arg_y)
-      state.globals['args'] = [arg_x, arg_y]
+        state = nArgFuncEntry(proj, funcname, 2)
     return (proj, state)
 
 def kocher11(s):
@@ -46,18 +66,12 @@ def kocher11(s):
     the Kocher test case '11gcc', '11ker', or '11sub' respectively.
     """
     proj = angr.Project('spectector-clang/11'+s+'.o')
-    funcaddr = proj.loader.find_symbol("victim_function_v11").rebased_addr
-    arg_x = claripy.BVS("x", 64)  # unconstrained
-    state = proj.factory.call_state(funcaddr, arg_x)
-    state.globals['args'] = [arg_x]
+    state = oneArgFuncEntry(proj, "victim_function_v11")
     return (proj, state)
 
 def blatantOOB():
     proj = angr.Project('blatantOOB.o')
-    arg = claripy.BVS("x", 64)  # unconstrained
-    funcaddr = proj.loader.find_symbol("victim_function_v01").rebased_addr
-    state = proj.factory.call_state(funcaddr, arg)
-    state.globals['arg'] = arg
+    state = oneArgFuncEntry(proj, "victim_function_v01")
     return (proj, state)
 
 def armBoundsChecks(proj,state):
