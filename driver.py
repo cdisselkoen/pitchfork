@@ -17,24 +17,15 @@ logging.getLogger('spectre').setLevel(logging.DEBUG)
 logging.getLogger('oob').setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.INFO)
 
-def oneArgFuncEntry(proj, funcname, argname='x'):
+def funcEntryState(proj, funcname, n, argnames=None):
     """
-    Get a state ready to enter the given 1-argument function, with the argument
-    as a fully unconstrained 64-bit value. Argname is what to name the argument BVS,
-    if you want a custom name.
-    """
-    funcaddr = proj.loader.find_symbol(funcname).rebased_addr
-    arg = claripy.BVS(argname, 64)  # unconstrained
-    state = proj.factory.call_state(funcaddr, arg)
-    state.globals['args'] = [arg]
-    return state
-
-def nArgFuncEntry(proj, funcname, n, argnames=None):
-    """
-    Get a state ready to enter the given N-argument function, with each argument
-    as a fully unconstrained 64-bit value. Argnames is either None (the default)
-    in which case the argument BVS's get names 'arg1', 'arg2', etc, or an iterable
-    of custom names to use for the argument BVS's
+    Get a state ready to enter the given function, with each argument
+        as a fully unconstrained 64-bit value.
+    funcname: name of the function to enter
+    n: number of arguments to the function
+    argnames: either None (the default) in which case the argument BVS's get
+        names 'arg1', 'arg2', etc, or an iterable of custom names to use for
+        the argument BVS's
     """
     funcaddr = proj.loader.find_symbol(funcname).rebased_addr
     args = (claripy.BVS("arg{}".format(i) if argnames is None else argnames[i], 64) for i in range(n))
@@ -55,9 +46,9 @@ def kocher(s):
     proj = angr.Project('spectector-clang/'+s+'.o')
     funcname = "victim_function_v"+s
     if s not in ('09','10','12'):
-        state = oneArgFuncEntry(proj, funcname)
+        state = funcEntryState(proj, funcname, 1)
     else:
-        state = nArgFuncEntry(proj, funcname, 2)
+        state = funcEntryState(proj, funcname, 2)
     return (proj, state)
 
 def kocher11(s):
@@ -66,12 +57,12 @@ def kocher11(s):
     the Kocher test case '11gcc', '11ker', or '11sub' respectively.
     """
     proj = angr.Project('spectector-clang/11'+s+'.o')
-    state = oneArgFuncEntry(proj, "victim_function_v11")
+    state = funcEntryState(proj, "victim_function_v11", 1)
     return (proj, state)
 
 def blatantOOB():
     proj = angr.Project('blatantOOB.o')
-    state = oneArgFuncEntry(proj, "victim_function_v01")
+    state = funcEntryState(proj, "victim_function_v01", 1)
     return (proj, state)
 
 def armBoundsChecks(proj,state):
