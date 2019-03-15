@@ -1,6 +1,6 @@
 from specvex import SimEngineSpecVEX, SpecState
 from oob import OOBState
-from spectre import SpectreState
+from spectre import SpectreOOBState, SpectreExplicitState
 
 import angr
 import claripy
@@ -13,25 +13,31 @@ logging.getLogger('angr.engines').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.unicorn').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.hook').setLevel(logging.INFO)
 logging.getLogger('specvex').setLevel(logging.DEBUG)
-logging.getLogger('spectre').setLevel(logging.DEBUG)
+logging.getLogger('spectre').setLevel(logging.INFO)
 logging.getLogger('oob').setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.INFO)
 
-def funcEntryState(proj, funcname, n, argnames=None):
+def funcEntryState(proj, funcname, n, arglengths=None, argnames=None):
     """
     Get a state ready to enter the given function, with each argument
         as a fully unconstrained 64-bit value.
     funcname: name of the function to enter
     n: number of arguments to the function
+    arglengths: an iterable of n values, each of which is either:
+        None (if the respective function argument is not a pointer, or if the size should be unconstrained); or
+        the size, in *bytes*, of the array/struct the argument points to.
+        If arglengths itself is None (the default), that is shorthand for all None's
     argnames: either None (the default) in which case the argument BVS's get
         names 'arg1', 'arg2', etc, or an iterable of custom names to use for
         the argument BVS's
     """
     funcaddr = proj.loader.find_symbol(funcname).rebased_addr
-    args = (claripy.BVS("arg{}".format(i) if argnames is None else argnames[i], 64) for i in range(n))
+    args = list(claripy.BVS("arg{}".format(i) if argnames is None else argnames[i], 64) for i in range(n))
     state = proj.factory.call_state(funcaddr, *args)
-    state.globals['args'] = args
+    state.globals['args'] = list(zip(args, arglengths) if arglengths is not None else zip(args, iter(lambda _: None, True)))
     return state
+
+# Loading various binaries for testing
 
 def fauxware():
     proj = angr.Project('../angr-binaries/tests/x86_64/fauxware')
@@ -45,10 +51,14 @@ def kocher(s):
     """
     proj = angr.Project('spectector-clang/'+s+'.o')
     funcname = "victim_function_v"+s
-    if s not in ('09','10','12'):
-        state = funcEntryState(proj, funcname, 1)
-    else:
+    if s in ('10','12'):
         state = funcEntryState(proj, funcname, 2)
+    elif s == '09':
+        state = funcEntryState(proj, funcname, 2, arglengths=[None, 8])
+    elif s == '15':
+        state = funcEntryState(proj, funcname, 1, arglengths=[8])
+    else:
+        state = funcEntryState(proj, funcname, 1)
     return (proj, state)
 
 def kocher11(s):
@@ -65,15 +75,40 @@ def blatantOOB():
     state = funcEntryState(proj, "victim_function_v01", 1)
     return (proj, state)
 
+def tweetnacl_crypto_sign():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_sign_ed25519_tweet", 5,
+        argnames=["sm","smlen","m","mlen","sk"],
+        arglengths=[None, # sm (signed message): Output parameter, buffer of at least size [length m] + 64
+                    8, # smlen (signed message length): Output parameter where the actual length of sm is written
+                    None, # m (message): unconstrained
+                    None, # mlen (message length): length of m
+                    64] # sk (secret key) size 64 bytes
+    )
+    return (proj, state)
+
+# Set up checking
+
 def armBoundsChecks(proj,state):
     state.register_plugin('oob', OOBState(proj))
     assert len(state.oob.inbounds_intervals) > 0
     state.oob.arm(state)
     assert state.oob.armed()
 
-def armSpectreChecks(proj,state):
+def armSpectreOOBChecks(proj,state):
     state.register_plugin('oob', OOBState(proj))
-    state.register_plugin('spectre', SpectreState())
+    state.register_plugin('spectre', SpectreOOBState())
+    state.spectre.arm(state)
+    assert state.spectre.armed()
+
+def armSpectreExplicitChecks(proj, state, secretArgs):
+    """
+    secretArgs: an iterable of booleans, indicate for each arg whether the arg is secret (True) or public (False)
+    """
+    args = state.globals['args']
+    secretPairs = (args[i] for (i,arg) in enumerate(secretArgs) if arg)
+    secretIntervals = ((arg, arg+length) for (arg,length) in secretPairs)
+    state.register_plugin('spectre', SpectreExplicitState(secretIntervals))
     state.spectre.arm(state)
     assert state.spectre.armed()
 
@@ -119,30 +154,43 @@ def showbbASM(proj, bbaddr):
 def showbbVEX(proj, bbaddr):
     proj.factory.block(bbaddr).vex.pp()
 
+def runTweetNaclSpec():
+    l.info("Running TweetNaCl crypto_sign with speculative execution")
+    proj,state = tweetnacl_crypto_sign()
+    armSpectreExplicitChecks(proj, state, [False, False, False, False, True])
+    makeSpeculative(proj,state)
+    return runState(proj,state)
+
+def runTweetNaclNotSpec():
+    l.info("Running TweetNaCl crypto_sign without speculative exeuction")
+    proj,state = tweetnacl_crypto_sign()
+    armSpectreExplicitChecks(proj, state, [False, False, False, False, True])
+    return runState(proj,state)
+
 def runSpec(s):
     l.info("Running Kocher test case {} with speculative execution".format(s))
     proj,state = kocher(s)
-    armSpectreChecks(proj,state)
+    armSpectreOOBChecks(proj,state)
     makeSpeculative(proj,state)
     return runState(proj,state)
 
 def runNotSpec(s):
     l.info("Running Kocher test case {} without speculative execution".format(s))
     proj,state = kocher(s)
-    armSpectreChecks(proj,state)
+    armSpectreOOBChecks(proj,state)
     return runState(proj,state)
 
 def run11Spec(s):
     l.info("Running Kocher test case 11{} with speculative execution".format(s))
     proj,state = kocher11(s)
-    armSpectreChecks(proj,state)
+    armSpectreOOBChecks(proj,state)
     makeSpeculative(proj,state)
     return runState(proj,state)
 
 def run11NotSpec(s):
     l.info("Running Kocher test case 11{} without speculative execution".format(s))
     proj,state = kocher11(s)
-    armSpectreChecks(proj,state)
+    armSpectreOOBChecks(proj,state)
     return runState(proj,state)
 
 def runallSpec():

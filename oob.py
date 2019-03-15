@@ -9,10 +9,10 @@ class OOBState(angr.SimStatePlugin):
     State tracking for crudely marking what is determined 'in-bounds'.
     If you 'arm' it, it reports any potential memory read/write to any area not marked 'in-bounds'.
 
-    This 'in-bounds' determination is not used by the Spectre checker (which
+    This 'in-bounds' determination is not used by the SpectreOOB checker (which
     relies on uninitialized memory for the initial 'secret' determination, then a
     form of taint tracking), but it is used by the OOB concretization strategy below
-    (which both OOB and Spectre checking rely on). However, the Spectre checker doesn't
+    (which both OOB and SpectreOOB checking rely on). However, the SpectreOOB checker doesn't
     need/want the OOB state to be 'armed'.
     """
 

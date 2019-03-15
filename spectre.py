@@ -7,9 +7,17 @@ from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretiz
 import logging
 l = logging.getLogger(name=__name__)
 
-class SpectreState(angr.SimStatePlugin):
+class SpectreOOBState(angr.SimStatePlugin):
     """
-    State tracking for Spectre gadget vulnerability detection
+    State tracking for Spectre gadget vulnerability detection.
+    This plugin treats all uninitialized memory as secret, everything else as
+    public.
+    (This generally works because most of the time, any useful Spectre gadget
+    is flexible enough that it can be made to leak data in *some*
+    uninitialized and/or unmapped part of the virtual address space.)
+
+    This plugin relies on the OOB state plugin existing (but not necessarily
+    being 'armed').
     """
 
     def __init__(self, armed=False):
@@ -19,7 +27,7 @@ class SpectreState(angr.SimStatePlugin):
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
-        return SpectreState(armed=self._armed)
+        return SpectreOOBState(armed=self._armed)
 
     def arm(self, state):
         """
@@ -33,12 +41,6 @@ class SpectreState(angr.SimStatePlugin):
         state.memory.read_strategies.insert(0, OOBStrategy())
         state.memory.write_strategies.insert(0, OOBStrategy())
         state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
-
-        # In the future, this code will be used to replace all 'solver' state plugins with our 'MySolver'
-        # but this doesn't work correctly, so for now we just patched angr's SimSolver to provide the leaves() method we need
-        #old_solver = state.solver
-        #state.release_plugin('solver')
-        #state.register_plugin('solver', MySolver(old_solver))
 
         state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY)
         state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_REGISTERS)
@@ -58,11 +60,88 @@ class SpectreState(angr.SimStatePlugin):
 def oob_memory_fill(name, bits, state):
     return state.solver.Unconstrained(name, bits, key=("OOB_"+name,), eternal=False, annotations=(TaintedAnnotation(),))
 
+class SpectreExplicitState(angr.SimStatePlugin):
+    """
+    State tracking for Spectre vulnerability detection.
+    This plugin treats some particular range(s) of memory addresses as secret
+    (explicitly specified as an argument to the constructor), and everything else
+    as public.
+    Useful to e.g. determine if a Spectre gadget exists that can leak the secret
+    cryptographic key stored in a particular location.
+
+    This plugin does not rely on the OOB state plugin in any way.
+    """
+
+    def __init__(self, secretIntervals, armed=False):
+        """
+        secretIntervals: Iterable of pairs (min, max) denoting ranges of memory to be
+        considered 'secret'
+        """
+        super().__init__()
+        self.secretIntervals = secretIntervals
+        self._armed = armed
+        self.violation = None
+
+    @angr.SimStatePlugin.memo
+    def copy(self, memo):
+        return SpectreExplicitState(self.secretIntervals, armed=self._armed)
+
+    def arm(self, state):
+        """
+        Setup hooks and breakpoints to perform Spectre gadget vulnerability detection.
+        Also set up concretization to ensure addresses always point to secret data when possible.
+        """
+        state.inspect.b('mem_read',  when=angr.BP_AFTER, condition=_tainted_read, action=detected_spectre_read)
+        state.inspect.b('mem_write', when=angr.BP_AFTER, condition=_tainted_write, action=detected_spectre_write)
+        state.inspect.b('exit', when=angr.BP_BEFORE, condition=_tainted_branch, action=detected_spectre_branch)
+
+        state.memory.read_strategies.insert(0, TargetedStrategy(self.secretIntervals))
+        state.memory.write_strategies.insert(0, TargetedStrategy(self.secretIntervals))
+        state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
+
+        state.options.add(angr.options.SYMBOLIC_WRITE_ADDRESSES)
+        state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY)
+        state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_REGISTERS)
+        state.options.add(angr.options.SYMBOLIC_INITIAL_VALUES)
+
+        secretStart = 0x1100000  # a should-be-unused part of the virtual memory space, after where CLE puts its 'externs' object
+        for (mn,mx) in self.secretIntervals:
+            if isinstance(mn, claripy.ast.Base):
+                if state.solver.solution(mn, secretStart):
+                    mn_as_int = secretStart
+                    state.solver.add(mn == mn_as_int)
+                    length = state.solver.eval_one(mx-mn_as_int)  # should be only one possible value of that expression, under these constraints
+                    if length is None:
+                        raise ValueError("Expected one solution for {} but got these: {}".format(mx-mn_as_int, state.solver.eval(mx-mn_as_int)))
+                    mx_as_int = secretStart+length
+                    state.solver.add(mx == mx_as_int)
+                    secretStart += length
+                else:
+                    raise ValueError("Can't resolve secret address {} to desired value {}".format(mn, secretStart))
+            else:
+                mn_as_int = mn
+                mx_as_int = mx  # assume that if mn is not an AST, mx isn't either
+            for i in range(mn_as_int,mx_as_int):
+                state.mem[i].uint8_t = oob_memory_fill("secret", 8, state)
+
+        self._armed = True
+
+    def armed(self):
+        """
+        Has arm() been called?
+        """
+        return self._armed
+
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
     addr = state.inspect.mem_read_address
     expr = state.inspect.mem_read_expr
-    l.debug("read {} (with annotations {}) from {} (with annotations {})".format(expr, expr.annotations, addr, addr.annotations))
+    if expr.annotations or addr.annotations:
+        l.info("read {} (with annotations {}) from {} (with annotations {})".format(expr, expr.annotations, addr, addr.annotations))
+    elif _can_point_to_secret(state, addr):
+        l.info("read {} (no annotations) from {} (no annotations) which could resolve to a secret address".format(expr, addr))
+    else:
+        l.debug("read {} (no annotations) from {} (no annotations)".format(expr, addr))
     if _is_tainted(state, addr):
         return can_be_oob(state, addr, state.inspect.mem_read_length)
     else:
@@ -80,10 +159,15 @@ def _tainted_write(state):
 def _tainted_branch(state):
     return _is_tainted(state, state.inspect.exit_guard)
 
+# Can the given ast resolve to an address that points to secret memory
+def _can_point_to_secret(state, ast):
+    in_each_interval = [claripy.And(ast >= mn, ast < mx) for (mn,mx) in state.spectre.secretIntervals]
+    if state.solver.satisfiable(extra_constraints=[claripy.Or(*in_each_interval)]): return True  # there is a solution to current constraints such that the ast points to secret
+    return False  # ast cannot point to secret
+
 def _is_tainted(state, ast):
     assert isinstance(state.solver, MySolver)
-    l.debug("checking if {} (with annotations {} and leaves {}) is tainted".format(ast, ast.annotations, list(state.solver.leaves(ast))))
-    #assert isinstance(state.solver, MySolver)
+    #l.debug("checking if {} (with annotations {} and leaves {}) is tainted".format(ast, ast.annotations, list(state.solver.leaves(ast))))
     return _is_immediately_tainted(ast) or any(_is_immediately_tainted(v) for v in state.solver.leaves(ast))
 
 def _is_immediately_tainted(ast):
@@ -91,17 +175,17 @@ def _is_immediately_tainted(ast):
 
 def detected_spectre_read(state):
     print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Address {}\n  Value {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
-        state.inspect.mem_read_address, state.inspect.mem_read_expr, state.globals['args'], state.solver.constraints, state.inspect.mem_read_expr.annotations))
+        state.inspect.mem_read_address, state.inspect.mem_read_expr, list(state.globals['args']), state.solver.constraints, state.inspect.mem_read_expr.annotations))
     state.spectre.violation = (state.inspect.mem_read_address, state.inspect.mem_read_expr)
 
 def detected_spectre_write(state):
     print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Address {}\n  Value {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
-        state.inspect.mem_write_address, state.inspect.mem_write_expr, state.globals['args'], state.solver.constraints, state.inspect.mem_write_expr.annotations))
+        state.inspect.mem_write_address, state.inspect.mem_write_expr, list(state.globals['args']), state.solver.constraints, state.inspect.mem_write_expr.annotations))
     state.spectre.violation = (state.inspect.mem_write_address, state.inspect.mem_write_expr)
 
 def detected_spectre_branch(state):
     print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
-        hex(state.addr), state.inspect.exit_target, state.inspect.exit_guard, state.globals['args'], state.solver.constraints, state.inspect.exit_guard.annotations))
+        hex(state.addr), state.inspect.exit_target, state.inspect.exit_guard, list(state.globals['args']), state.solver.constraints, state.inspect.exit_guard.annotations))
     state.spectre.violation = (state.addr, state.inspect.exit_target, state.inspect.exit_guard)
 
 class TaintedAnnotation(claripy.Annotation):
@@ -118,6 +202,31 @@ class TaintedAnnotation(claripy.Annotation):
 
     def relocate(self, src, dst):
         return src.annotation
+
+class TargetedStrategy(angr.concretization_strategies.SimConcretizationStrategy):
+    """
+    Concretization strategy which attempts to concretize addresses to some
+    targeted interval(s) if possible. See notes on superclass (and its other
+    subclasses) for more info on what's happening here.
+    """
+
+    def __init__(self, targetedIntervals, **kwargs):
+        super().__init__(**kwargs)
+        self.targetedIntervals = targetedIntervals
+
+    def concretize(self, memory, addr):
+        """
+        Attempts to resolve the address to a value in the targeted interval(s)
+        if possible. Else, defers to fallback strategies.
+        """
+        if not self.targetedIntervals: return None
+        try:
+            constraint = claripy.Or(*[claripy.And(addr >= mn, addr < mx) for (mn,mx) in self.targetedIntervals])
+            print("constraint is {}".format(constraint))
+            return [ self._any(memory, addr, extra_constraints=[constraint]) ]
+        except angr.errors.SimUnsatError:
+            # no solution
+            return None
 
 class MySolver(angr.state_plugins.SimSolver):
     """
