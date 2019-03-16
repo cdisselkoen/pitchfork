@@ -154,73 +154,56 @@ def showbbASM(proj, bbaddr):
 def showbbVEX(proj, bbaddr):
     proj.factory.block(bbaddr).vex.pp()
 
-def runTweetNaclSpec():
-    l.info("Running TweetNaCl crypto_sign with speculative execution")
+def runTweetNacl(spec=True):
+    """
+    spec: whether to enable speculative execution
+    """
+    l.info("Running TweetNaCl crypto_sign {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_sign()
     armSpectreExplicitChecks(proj, state, [False, False, False, False, True])
-    makeSpeculative(proj,state)
+    if spec: makeSpeculative(proj,state)
     return runState(proj,state)
 
-def runTweetNaclNotSpec():
-    l.info("Running TweetNaCl crypto_sign without speculative exeuction")
-    proj,state = tweetnacl_crypto_sign()
-    armSpectreExplicitChecks(proj, state, [False, False, False, False, True])
-    return runState(proj,state)
-
-def runSpec(s):
-    l.info("Running Kocher test case {} with speculative execution".format(s))
+def runKocher(s, spec=True):
+    """
+    spec: whether to enable speculative execution
+    """
+    l.info("Running Kocher test case {} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher(s)
     armSpectreOOBChecks(proj,state)
-    makeSpeculative(proj,state)
+    if spec: makeSpeculative(proj,state)
     return runState(proj,state)
 
-def runNotSpec(s):
-    l.info("Running Kocher test case {} without speculative execution".format(s))
-    proj,state = kocher(s)
-    armSpectreOOBChecks(proj,state)
-    return runState(proj,state)
-
-def run11Spec(s):
-    l.info("Running Kocher test case 11{} with speculative execution".format(s))
+def runKocher11(s, spec=True):
+    l.info("Running Kocher test case 11{} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher11(s)
     armSpectreOOBChecks(proj,state)
-    makeSpeculative(proj,state)
+    if spec: makeSpeculative(proj,state)
     return runState(proj,state)
 
-def run11NotSpec(s):
-    l.info("Running Kocher test case 11{} without speculative execution".format(s))
-    proj,state = kocher11(s)
-    armSpectreOOBChecks(proj,state)
-    return runState(proj,state)
-
-def runallSpec():
-    return unionDicts(
-        {s:runSpec(s) for s in ['01','02','03','04','05','06','07','08','09','10','12','13','14','15']},
-        {('11'+s):run11Spec(s) for s in ['gcc','ker','sub']})
-
-def runallNotSpec():
+def runallKocher(spec=True):
     return unionDicts(
         # if '05' is immediately after either '04' or '06' here, it fails (detects a
-        #   violation).
-        # if it is immediately after '03', or if you runNotSpec('05') alone, it
-        #   passes (no violation). I haven't tested other cases.
-        # '07' is exactly the same way: fails (detects a violation) when immediately
-        #   after '04' or '06', passes (no violation) when immediately after '05' or
+        #   violation even with spec=False).
+        # if it is immediately after '03', or if you runKocher('05', spec=False) alone, it
+        #   passes (no violation with spec=False). I haven't tested other cases.
+        # '07' is exactly the same way: fails (detects a violation even with spec=False)
+        #   when immediately after '04' or '06', passes when immediately after '05' or
         #   when run alone.
         # I haven't debugged this yet. I don't currently know of any reason this
-        #   should be, i.e. any state that could persist across runNotSpec() calls.
+        #   should be, i.e. any state that could persist across runKocher() calls.
         # (wishing for a language like Haskell or Rust where functions can't have
         #   arbitrary global side effects and we can't have hidden global mutable state)
-        {s:runNotSpec(s) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
-        {('11'+s):run11NotSpec(s) for s in ['gcc','ker','sub']})
+        {s:runKocher(s, spec=spec) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
+        {('11'+s):runKocher11(s, spec=spec) for s in ['gcc','ker','sub']})
 
 def alltests():
     logging.getLogger('angr.engines').setLevel(logging.WARNING)
     logging.getLogger('specvex').setLevel(logging.WARNING)
     logging.getLogger('spectre').setLevel(logging.WARNING)
     logging.getLogger('oob').setLevel(logging.WARNING)
-    notspec = runallNotSpec()
-    spec = runallSpec()
+    notspec = runallKocher(spec=False)
+    spec = runallKocher(spec=True)
     def violationDetected(simgr):
         return 'spectre_violation' in simgr.stashes and len(simgr.spectre_violation) > 0
     def testResult(s):
