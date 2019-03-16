@@ -161,6 +161,7 @@ def _tainted_branch(state):
 
 # Can the given ast resolve to an address that points to secret memory
 def _can_point_to_secret(state, ast):
+    if not isinstance(state.spectre, SpectreExplicitState): return False
     in_each_interval = [claripy.And(ast >= mn, ast < mx) for (mn,mx) in state.spectre.secretIntervals]
     if state.solver.satisfiable(extra_constraints=[claripy.Or(*in_each_interval)]): return True  # there is a solution to current constraints such that the ast points to secret
     return False  # ast cannot point to secret

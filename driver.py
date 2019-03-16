@@ -34,7 +34,7 @@ def funcEntryState(proj, funcname, n, arglengths=None, argnames=None):
     funcaddr = proj.loader.find_symbol(funcname).rebased_addr
     args = list(claripy.BVS("arg{}".format(i) if argnames is None else argnames[i], 64) for i in range(n))
     state = proj.factory.call_state(funcaddr, *args)
-    state.globals['args'] = list(zip(args, arglengths) if arglengths is not None else zip(args, iter(lambda _: None, True)))
+    state.globals['args'] = list(zip(args, arglengths) if arglengths is not None else ((arg, None) for arg in args))
     return state
 
 # Loading various binaries for testing
