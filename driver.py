@@ -17,24 +17,25 @@ logging.getLogger('spectre').setLevel(logging.INFO)
 logging.getLogger('oob').setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.INFO)
 
-def funcEntryState(proj, funcname, n, arglengths=None, argnames=None):
+def funcEntryState(proj, funcname, args):
     """
     Get a state ready to enter the given function, with each argument
         as a fully unconstrained 64-bit value.
     funcname: name of the function to enter
-    n: number of arguments to the function
-    arglengths: an iterable of n values, each of which is either:
-        None (if the respective function argument is not a pointer, or if the size should be unconstrained); or
-        the size, in *bytes*, of the array/struct the argument points to.
-        If arglengths itself is None (the default), that is shorthand for all None's
-    argnames: either None (the default) in which case the argument BVS's get
-        names 'arg1', 'arg2', etc, or an iterable of custom names to use for
-        the argument BVS's
+    args: a list of n values, one for each function argument, each of which
+        is a triple (name, length, secret) where:
+        name: either None, in which case you get a default name 'arg1', 'arg2', etc
+            or a custom name to use for the argument BVS
+        length: either None (if the respective function argument is not a pointer, or
+            if the size should be unconstrained); or
+            the size, *in bytes*, of the array/struct the argument points to
+        secret: (only used with SpectreExplicitState, and only matters if length is not None)
+            whether the data the argument points to is secret (True) or public (False)
     """
     funcaddr = proj.loader.find_symbol(funcname).rebased_addr
-    args = list(claripy.BVS("arg{}".format(i) if argnames is None else argnames[i], 64) for i in range(n))
-    state = proj.factory.call_state(funcaddr, *args)
-    state.globals['args'] = list(zip(args, arglengths) if arglengths is not None else ((arg, None) for arg in args))
+    argBVSs = list(claripy.BVS("arg{}".format(i) if name is None else name, 64) for (i, (name, _, _)) in enumerate(args))
+    state = proj.factory.call_state(funcaddr, *argBVSs)
+    state.globals['args'] = list(zip(args, argBVSs))
     return state
 
 # Loading various binaries for testing
@@ -52,13 +53,13 @@ def kocher(s):
     proj = angr.Project('spectector-clang/'+s+'.o')
     funcname = "victim_function_v"+s
     if s in ('10','12'):
-        state = funcEntryState(proj, funcname, 2)
+        state = funcEntryState(proj, funcname, [(None, None, False), (None, None, False)])
     elif s == '09':
-        state = funcEntryState(proj, funcname, 2, arglengths=[None, 8])
+        state = funcEntryState(proj, funcname, [(None, None, False), (None, 8, False)])
     elif s == '15':
-        state = funcEntryState(proj, funcname, 1, arglengths=[8])
+        state = funcEntryState(proj, funcname, [(None, 8, False)])
     else:
-        state = funcEntryState(proj, funcname, 1)
+        state = funcEntryState(proj, funcname, [(None, None, False)])
     return (proj, state)
 
 def kocher11(s):
@@ -67,7 +68,7 @@ def kocher11(s):
     the Kocher test case '11gcc', '11ker', or '11sub' respectively.
     """
     proj = angr.Project('spectector-clang/11'+s+'.o')
-    state = funcEntryState(proj, "victim_function_v11", 1)
+    state = funcEntryState(proj, "victim_function_v11", [(None, None, False)])
     return (proj, state)
 
 def blatantOOB():
@@ -77,14 +78,13 @@ def blatantOOB():
 
 def tweetnacl_crypto_sign():
     proj = angr.Project('tweetnacl/tweetnacl.o')
-    state = funcEntryState(proj, "crypto_sign_ed25519_tweet", 5,
-        argnames=["sm","smlen","m","mlen","sk"],
-        arglengths=[None, # sm (signed message): Output parameter, buffer of at least size [length m] + 64
-                    8, # smlen (signed message length): Output parameter where the actual length of sm is written
-                    None, # m (message): unconstrained
-                    None, # mlen (message length): length of m
-                    64] # sk (secret key) size 64 bytes
-    )
+    state = funcEntryState(proj, "crypto_sign_ed25519_tweet", [
+        ("sm", None, False),  # signed message: Output parameter, buffer of at least size [length m] + 64
+        ("smlen", 8, False),  # signed message length: Output parameter where the actual length of sm is written
+        ("m", None, False),  # message: unconstrained length
+        ("mlen", None, False),  # message length: length of m. Not a pointer.
+        ("sk", 64, True),  # secret key: size 64 bytes
+    ])
     return (proj, state)
 
 # Set up checking
@@ -101,12 +101,9 @@ def armSpectreOOBChecks(proj,state):
     state.spectre.arm(state)
     assert state.spectre.armed()
 
-def armSpectreExplicitChecks(proj, state, secretArgs):
-    """
-    secretArgs: an iterable of booleans, indicate for each arg whether the arg is secret (True) or public (False)
-    """
+def armSpectreExplicitChecks(proj, state):
     args = state.globals['args']
-    secretPairs = (args[i] for (i,arg) in enumerate(secretArgs) if arg)
+    secretPairs = ((arg,length) for (i,((name,length,secret),arg)) in enumerate(args) if secret)
     secretIntervals = ((arg, arg+length) for (arg,length) in secretPairs)
     state.register_plugin('spectre', SpectreExplicitState(secretIntervals))
     state.spectre.arm(state)
@@ -160,7 +157,7 @@ def runTweetNacl(spec=True):
     """
     l.info("Running TweetNaCl crypto_sign {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_sign()
-    armSpectreExplicitChecks(proj, state, [False, False, False, False, True])
+    armSpectreExplicitChecks(proj, state)
     if spec: makeSpeculative(proj,state)
     return runState(proj,state)
 
