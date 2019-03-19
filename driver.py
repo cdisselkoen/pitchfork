@@ -87,6 +87,52 @@ def tweetnacl_crypto_sign():
     ])
     return (proj, state)
 
+def tweetnacl_crypto_sign_keypair():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_sign_ed25519_tweet_keypair",
+        [("pk", 32, False), ("sk", 64, True)])
+    return (proj, state)
+
+def tweetnacl_crypto_stream_salsa20():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_stream_salsa20_tweet", [
+        ("c", None, False),  # Output parameter, buffer of size clen
+        ("clen", None, False),  # length of the 'c' output buffer
+        ("n", 8, False),  # nonce, buffer of size crypto_stream_salsa20_tweet_NONCEBYTES
+        ("k", 32, True)  # secret key: size 32 bytes
+    ])
+    return (proj, state)
+
+def tweetnacl_crypto_stream_xsalsa20():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_stream_xsalsa20_tweet", [
+        ("c", None, False),  # Output parameter, buffer of size clen
+        ("clen", None, False),  # length of 'c' output buffer
+        ("n", 24, False),  # nonce, buffer of size crypto_stream_xsalsa20_tweet_NONCEBYTES
+        ("k", 32, True)  # secret key: size 32 bytes
+    ])
+    return (proj, state)
+
+def tweetnacl_crypto_onetimeauth():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet", [
+        ("a", 16, False),  # Output parameter, gets authenticator, size crypto_onetimeauth_BYTES
+        ("m", None, False),  # message: unconstrained length
+        ("mlen", None, False),  # length of message. Not a pointer
+        ("k", 32, True)  # secret key: size 32 bytes
+    ])
+    return (proj, state)
+
+def tweetnacl_crypto_onetimeauth_verify():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet_verify", [
+        ("a", 16, False),  # authenticator, size crypto_onetimeauth_BYTES
+        ("m", None, False),  # message: unconstrained length
+        ("mlen", None, False),  # length of message. Not a pointer
+        ("k", 32, True)  # secret key: size 32 bytes
+    ])
+    return (proj, state)
+
 # Set up checking
 
 def armBoundsChecks(proj,state):
@@ -109,8 +155,11 @@ def armSpectreExplicitChecks(proj, state):
     state.spectre.arm(state)
     assert state.spectre.armed()
 
-def makeSpeculative(proj, state):
-    proj.engines.register_plugin('specvex', SimEngineSpecVEX(1000))
+def makeSpeculative(proj, state, window=1000):
+    """
+    window: size of speculative window (~ROB) in VEX instructions. TODO make this x86 instructions
+    """
+    proj.engines.register_plugin('specvex', SimEngineSpecVEX(window))
     proj.engines.order = ['specvex' if x=='vex' else x for x in proj.engines.order]  # replace 'vex' with 'specvex'
     if proj.engines.has_plugin('vex'): proj.engines.release_plugin('vex')
 
@@ -151,34 +200,120 @@ def showbbASM(proj, bbaddr):
 def showbbVEX(proj, bbaddr):
     proj.factory.block(bbaddr).vex.pp()
 
-def runTweetNacl(spec=True):
+def runTweetNaclCryptoSign(spec=True, window=None):
     """
     spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_sign {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_sign()
-    armSpectreExplicitChecks(proj, state)
-    if spec: makeSpeculative(proj,state)
+    armSpectreExplicitChecks(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
     return runState(proj,state)
 
-def runKocher(s, spec=True):
+def runTweetNaclCryptoSignKeypair(spec=True, window=None):
     """
     spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_sign_keypair {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_sign_keypair()
+    armSpectreExplicitChecks(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
+    return runState(proj,state)
+
+def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_stream_salsa20 {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_stream_salsa20()
+    armSpectreExplicitChecks(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
+    return runState(proj,state)
+
+def runTweetNaclCryptoStreamXSalsa20(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_stream_xsalsa20 {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_stream_xsalsa20()
+    armSpectreExplicitChecks(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
+    return runState(proj,state)
+
+def runTweetNaclCryptoOnetimeauth(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_onetimeauth {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_onetimeauth()
+    armSpectreExplicitChecks(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
+    return runState(proj,state)
+
+def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_onetimeauth_verify {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_onetimeauth_verify()
+    armSpectreExplicitChecks(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
+    return runState(proj,state)
+
+def runKocher(s, spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
     """
     l.info("Running Kocher test case {} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher(s)
     armSpectreOOBChecks(proj,state)
-    if spec: makeSpeculative(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
     return runState(proj,state)
 
-def runKocher11(s, spec=True):
+def runKocher11(s, spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
     l.info("Running Kocher test case 11{} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher11(s)
     armSpectreOOBChecks(proj,state)
-    if spec: makeSpeculative(proj,state)
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
     return runState(proj,state)
 
-def runallKocher(spec=True):
+def runallTweetNacl(spec=True, window=None):
+    return { "crypto_sign":runTweetNaclCryptoSign(spec=spec, window=window),
+             "crypto_sign_keypair":runTweetNaclCryptoSignKeypair(spec=spec, window=window),
+             "crypto_stream_salsa20":runTweetNaclCryptoStreamSalsa20(spec=spec, window=window if window is not None else 100),  # different default due to long runtimes with default window size
+             "crypto_stream_xsalsa20":runTweetNaclCryptoStreamXSalsa20(spec=spec, window=window),
+             "crypto_onetimeauth":runTweetNaclCryptoOnetimeauth(spec=spec, window=window if window is not None else 500),  # different default due to long runtimes with default window size
+             "crypto_onetimeauth_verify":runTweetNaclCryptoOnetimeauthVerify(spec=spec, window=window if window is not None else 500)  # different default due to long runtimes with default window size
+           }
+
+def runallKocher(spec=True, window=None):
     return unionDicts(
         # if '05' is immediately after either '04' or '06' here, it fails (detects a
         #   violation even with spec=False).
@@ -191,8 +326,8 @@ def runallKocher(spec=True):
         #   should be, i.e. any state that could persist across runKocher() calls.
         # (wishing for a language like Haskell or Rust where functions can't have
         #   arbitrary global side effects and we can't have hidden global mutable state)
-        {s:runKocher(s, spec=spec) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
-        {('11'+s):runKocher11(s, spec=spec) for s in ['gcc','ker','sub']})
+        {s:runKocher(s, spec=spec, window=window) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
+        {('11'+s):runKocher11(s, spec=spec, window=window) for s in ['gcc','ker','sub']})
 
 def alltests():
     logging.getLogger('angr.engines').setLevel(logging.WARNING)
