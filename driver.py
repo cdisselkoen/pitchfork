@@ -167,7 +167,14 @@ def makeSpeculative(proj, state, window=1000):
     state.register_plugin('spec', SpecState())
     assert state.spec.ins_executed == 0
 
-def runState(proj, state):
+def runState(proj, state, spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    if spec:
+        if window is not None: makeSpeculative(proj,state,window)
+        else: makeSpeculative(proj,state)
     simgr = proj.factory.simgr(state, save_unsat=True)
     if state.has_plugin('oob'):
         simgr.use_technique(OOBViolationFilter())
@@ -208,10 +215,7 @@ def runTweetNaclCryptoSign(spec=True, window=None):
     l.info("Running TweetNaCl crypto_sign {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_sign()
     armSpectreExplicitChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runTweetNaclCryptoSignKeypair(spec=True, window=None):
     """
@@ -221,10 +225,7 @@ def runTweetNaclCryptoSignKeypair(spec=True, window=None):
     l.info("Running TweetNaCl crypto_sign_keypair {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_sign_keypair()
     armSpectreExplicitChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
     """
@@ -234,10 +235,7 @@ def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
     l.info("Running TweetNaCl crypto_stream_salsa20 {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_stream_salsa20()
     armSpectreExplicitChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runTweetNaclCryptoStreamXSalsa20(spec=True, window=None):
     """
@@ -247,10 +245,7 @@ def runTweetNaclCryptoStreamXSalsa20(spec=True, window=None):
     l.info("Running TweetNaCl crypto_stream_xsalsa20 {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_stream_xsalsa20()
     armSpectreExplicitChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runTweetNaclCryptoOnetimeauth(spec=True, window=None):
     """
@@ -260,10 +255,7 @@ def runTweetNaclCryptoOnetimeauth(spec=True, window=None):
     l.info("Running TweetNaCl crypto_onetimeauth {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_onetimeauth()
     armSpectreExplicitChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
     """
@@ -273,10 +265,7 @@ def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
     l.info("Running TweetNaCl crypto_onetimeauth_verify {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_onetimeauth_verify()
     armSpectreExplicitChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runKocher(s, spec=True, window=None):
     """
@@ -286,10 +275,7 @@ def runKocher(s, spec=True, window=None):
     l.info("Running Kocher test case {} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher(s)
     armSpectreOOBChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runKocher11(s, spec=True, window=None):
     """
@@ -299,10 +285,7 @@ def runKocher11(s, spec=True, window=None):
     l.info("Running Kocher test case 11{} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher11(s)
     armSpectreOOBChecks(proj,state)
-    if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
-    return runState(proj,state)
+    return runState(proj, state, spec=spec, window=window)
 
 def runallTweetNacl(spec=True, window=None):
     return { "crypto_sign":runTweetNaclCryptoSign(spec=spec, window=window),
