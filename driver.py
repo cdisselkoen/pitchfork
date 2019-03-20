@@ -133,6 +133,52 @@ def tweetnacl_crypto_onetimeauth_verify():
     ])
     return (proj, state)
 
+def tweetnacl_crypto_secretbox():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_secretbox_xsalsa20poly1305_tweet", [
+        ("c", None, False),  # Output parameter, will hold ciphertext, length 'mlen'
+        ("m", None, False),  # message: length 'mlen'
+        ("mlen", None, False),  # length of message. Not a pointer
+        ("n", 24, False),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
+        ("k", 32, True)  # secret key: size 32 bytes
+    ])
+    return (proj, state)
+
+def tweetnacl_crypto_secretbox_open():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_secretbox_xsalsa20poly1305_tweet_open", [
+        ("m", None, False),  # Output parameter, will hold plaintext, length 'clen'
+        ("c", None, False),  # ciphertext, length 'clen'
+        ("clen", None, False),  # length of ciphertext. Not a pointer
+        ("n", 24, False),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
+        ("k", 32, True)  # secret key: size 32 bytes
+    ])
+    return (proj, state)
+
+def tweetnacl_crypto_box():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_box_curve25519xsalsa20poly1305_tweet", [
+        ("c", None, False),  # Output parameter, will hold ciphertext, length 'mlen'
+        ("m", None, False),  # message: length 'mlen'
+        ("mlen", None, False),  # length of message. Not a pointer
+        ("n", 24, False),  # nonce, size crypto_box_NONCEBYTES
+        ("pk", 32, False),  # public key, size crypto_box_PUBLICKEYBYTES
+        ("sk", 32, True)  # secret key, size crypto_box_SECRETKEYBYTES
+    ])
+    return (proj, state)
+
+def tweetnacl_crypto_box_open():
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_box_curve25519xsalsa20poly1305_tweet_open", [
+        ("m", None, False),  # Output parameter, will hold plaintext, length 'clen'
+        ("c", None, False),  # ciphertext: length 'clen'
+        ("clen", None, False),  # length of ciphertext. Not a pointer
+        ("n", 24, False),  # nonce, size crypto_box_NONCEBYTES
+        ("pk", 32, False),  # public key, size crypto_box_PUBLICKEYBYTES
+        ("sk", 32, True)  # secret key, size crypto_box_SECRETKEYBYTES
+    ])
+    return (proj, state)
+
 # Set up checking
 
 def armBoundsChecks(proj,state):
@@ -267,6 +313,46 @@ def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
     armSpectreExplicitChecks(proj,state)
     return runState(proj, state, spec=spec, window=window)
 
+def runTweetNaclCryptoSecretBox(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_secretbox {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_secretbox()
+    armSpectreExplicitChecks(proj,state)
+    return runState(proj, state, spec=spec, window=window)
+
+def runTweetNaclCryptoSecretBoxOpen(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_secretbox_open {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_secretbox_open()
+    armSpectreExplicitChecks(proj,state)
+    return runState(proj, state, spec=spec, window=window)
+
+def runTweetNaclCryptoBox(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_box {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_box()
+    armSpectreExplicitChecks(proj,state)
+    return runState(proj, state, spec=spec, window=window)
+
+def runTweetNaclCryptoBoxOpen(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_box_open {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_box_open()
+    armSpectreExplicitChecks(proj,state)
+    return runState(proj, state, spec=spec, window=window)
+
 def runKocher(s, spec=True, window=None):
     """
     spec: whether to enable speculative execution
@@ -293,7 +379,11 @@ def runallTweetNacl(spec=True, window=None):
              "crypto_stream_salsa20":runTweetNaclCryptoStreamSalsa20(spec=spec, window=window if window is not None else 100),  # different default due to long runtimes with default window size
              "crypto_stream_xsalsa20":runTweetNaclCryptoStreamXSalsa20(spec=spec, window=window),
              "crypto_onetimeauth":runTweetNaclCryptoOnetimeauth(spec=spec, window=window if window is not None else 500),  # different default due to long runtimes with default window size
-             "crypto_onetimeauth_verify":runTweetNaclCryptoOnetimeauthVerify(spec=spec, window=window if window is not None else 500)  # different default due to long runtimes with default window size
+             "crypto_onetimeauth_verify":runTweetNaclCryptoOnetimeauthVerify(spec=spec, window=window if window is not None else 500),  # different default due to long runtimes with default window size
+             "crypto_secretbox":runTweetNaclCryptoSecretBox(spec=spec, window=window),
+             "crypto_secretbox_open":runTweetNaclCryptoSecretBoxOpen(spec=spec, window=window),
+             "crypto_box":runTweetNaclCryptoBox(spec=spec, window=window),
+             "crypto_box_open":runTweetNaclCryptoBoxOpen(spec=spec, window=window)
            }
 
 def runallKocher(spec=True, window=None):
