@@ -10,10 +10,6 @@ l = logging.getLogger(name=__name__)
 
 import time
 
-logging.getLogger('angr.engines').setLevel(logging.INFO)
-#logging.getLogger('angr.engines.vex.expressions').setLevel(logging.INFO)
-#logging.getLogger('angr.engines.unicorn').setLevel(logging.INFO)
-#logging.getLogger('angr.engines.hook').setLevel(logging.INFO)
 logging.getLogger('specvex').setLevel(logging.DEBUG)
 logging.getLogger('spectre').setLevel(logging.INFO)
 logging.getLogger('oob').setLevel(logging.DEBUG)
@@ -428,7 +424,6 @@ def alltests(kocher=True, tweetnacl=True):
     """
     if not kocher and not tweetnacl:
         raise ValueError("no tests specified")
-    logging.getLogger('angr.engines').setLevel(logging.WARNING)
     logging.getLogger('specvex').setLevel(logging.WARNING)
     logging.getLogger('spectre').setLevel(logging.WARNING)
     logging.getLogger('oob').setLevel(logging.WARNING)
