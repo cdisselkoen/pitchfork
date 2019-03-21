@@ -3,6 +3,7 @@ import claripy
 import pyvex
 
 from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
+from taint import taintedUnconstrainedBits, is_tainted
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -58,7 +59,7 @@ class SpectreOOBState(angr.SimStatePlugin):
         return self._armed
 
 def oob_memory_fill(name, bits, state):
-    return state.solver.Unconstrained(name, bits, key=("OOB_"+name,), eternal=False, annotations=(TaintedAnnotation(),))
+    return taintedUnconstrainedBits(state, name, bits)
 
 class SpectreExplicitState(angr.SimStatePlugin):
     """
@@ -133,7 +134,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
         return self._armed
 
 def describeAst(state, ast):
-    return "{} (TAINTED)".format(ast) if _is_tainted(state, ast) \
+    return "{} (TAINTED)".format(ast) if is_tainted(state, ast) \
             else "{} (not tainted, but with annotations {})".format(ast, ast.annotations) if ast.annotations \
             else "{} (no annotations, untainted)".format(ast)
 
@@ -142,7 +143,7 @@ def _tainted_read(state):
     addr = state.inspect.mem_read_address
     expr = state.inspect.mem_read_expr
     l.debug("read {} from {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
-    if _is_tainted(state, addr):
+    if is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)
             return True
@@ -159,7 +160,7 @@ def _tainted_write(state):
     addr = state.inspect.mem_write_address
     expr = state.inspect.mem_write_expr
     l.debug("wrote {} to {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
-    if _is_tainted(state, addr):
+    if is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)
             return True
@@ -173,7 +174,7 @@ def _tainted_write(state):
 
 # Call during a breakpoint callback on 'exit' (i.e. conditional branch)
 def _tainted_branch(state):
-    return _is_tainted(state, state.inspect.exit_guard)
+    return is_tainted(state, state.inspect.exit_guard)
 
 # Can the given ast resolve to an address that points to secret memory
 def _can_point_to_secret(state, ast):
@@ -181,28 +182,6 @@ def _can_point_to_secret(state, ast):
     in_each_interval = [claripy.And(ast >= mn, ast < mx) for (mn,mx) in state.spectre.secretIntervals]
     if state.solver.satisfiable(extra_constraints=[claripy.Or(*in_each_interval)]): return True  # there is a solution to current constraints such that the ast points to secret
     return False  # ast cannot point to secret
-
-def _is_tainted(state, ast):
-    assert isinstance(state.solver, MySolver)
-    l.debug("checking if {} (with annotations {} and leaves {}) is tainted".format(ast, ast.annotations, list(state.solver.leaves(ast))))
-    if _is_immediately_tainted(ast):
-        l.debug("{} is immediately tainted".format(ast))
-        return True
-    if any(_is_immediately_tainted(v) for v in state.solver.leaves(ast)):
-        l.debug("one of the leaves {} is tainted".format(list(state.solver.leaves(ast))))
-        return True
-    return False
-    #return _is_immediately_tainted(ast) or any(_is_immediately_tainted(v) for v in state.solver.leaves(ast))
-
-def _is_immediately_tainted(ast):
-    if ast.uninitialized:
-        l.debug("{} is uninitialized".format(ast))
-        #return True
-    if any(isinstance(a, TaintedAnnotation) for a in ast.annotations):
-        l.debug("one of the annotations {} is tainted".format(list(ast.annotations)))
-        return True
-    return False
-    #return ast.uninitialized or any(isinstance(a, TaintedAnnotation) for a in ast.annotations)
 
 def detected_spectre_read(state):
     print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Instruction Address {}\n  Read Address {}\n  Read Value {}\n  args were {}\n  constraints were {}\n".format(
@@ -230,24 +209,6 @@ def detected_spectre_branch(state):
         list(arg for (_, arg) in state.globals['args']),
         state.solver.constraints))
     state.spectre.violation = (state.addr, state.inspect.exit_target, state.inspect.exit_guard)
-
-class TaintedAnnotation(claripy.Annotation):
-    """
-    Annotation for doing taint-tracking in angr.
-    """
-    @property
-    def eliminatable(self):
-        return False
-
-    @property
-    def relocatable(self):
-        return True
-
-    def relocate(self, src, dst):
-        srcAnnotations = list(src.annotations)
-        if len(srcAnnotations) == 0: return None
-        elif len(srcAnnotations) == 1: return srcAnnotations[0]
-        else: raise ValueError("more than one annotation: {}".format(srcAnnotations))
 
 class TargetedStrategy(angr.concretization_strategies.SimConcretizationStrategy):
     """
