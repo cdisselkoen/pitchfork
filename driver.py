@@ -402,24 +402,50 @@ def runallKocher(spec=True, window=None):
         {s:runKocher(s, spec=spec, window=window) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
         {('11'+s):runKocher11(s, spec=spec, window=window) for s in ['gcc','ker','sub']})
 
-def alltests():
+def alltests(kocher=True, tweetnacl=True):
+    """
+    kocher: whether to run Kocher tests
+    tweetnacl: whether to run TweetNaCl tests
+    """
+    if not kocher and not tweetnacl:
+        raise ValueError("no tests specified")
     logging.getLogger('angr.engines').setLevel(logging.WARNING)
     logging.getLogger('specvex').setLevel(logging.WARNING)
     logging.getLogger('spectre').setLevel(logging.WARNING)
     logging.getLogger('oob').setLevel(logging.WARNING)
-    notspec = runallKocher(spec=False)
-    spec = runallKocher(spec=True)
+    if kocher:
+        kocher_notspec = runallKocher(spec=False)
+        kocher_spec = runallKocher(spec=True)
+    if tweetnacl:
+        tweetnacl_notspec = runallTweetNacl(spec=False)
+        tweetnacl_spec = runallTweetNacl(spec=True)
     def violationDetected(simgr):
         return 'spectre_violation' in simgr.stashes and len(simgr.spectre_violation) > 0
-    def testResult(s):
-        return ("FAIL: detected a violation without speculative execution" if violationDetected(notspec[s])
-            else "FAIL: no violation detected" if not violationDetected(spec[s])
+    def kocher_testResult(s):
+        return ("FAIL: detected a violation without speculative execution" if violationDetected(kocher_notspec[s])
+            else "FAIL: no violation detected" if not violationDetected(kocher_spec[s])
             else "PASS")
-    return {k:testResult(k) for k in spec.keys()}
+    def tweetnacl_testResult(s):
+        return ("FAIL: detected a violation without speculative execution" if violationDetected(tweetnacl_notspec[s])
+            else "violation detected" if violationDetected(tweetnacl_spec[s])
+            else "no violation detected")
+    if kocher:
+        kocher_results = {k:kocher_testResult(k) for k in kocher_spec.keys()}
+    if tweetnacl:
+        tweetnacl_results = {k:tweetnacl_testResult(k) for k in tweetnacl_spec.keys()}
+    if kocher and not tweetnacl:
+        print("Kocher tests:")
+        return kocher_results
+    elif tweetnacl and not kocher:
+        print("TweetNaCl tests:")
+        return tweetnacl_results
+    elif tweetnacl and kocher:
+        return {"Kocher tests":kocher_results,
+                "TweetNaCl tests":tweetnacl_results}
 
 def unionDicts(dicta, dictb):
     return {**dicta, **dictb}  # requires Python 3.5+
 
 if __name__ == '__main__':
     from pprint import pprint
-    pprint(alltests())
+    pprint(alltests(tweetnacl=False))
