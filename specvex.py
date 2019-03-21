@@ -34,12 +34,12 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
         # multiple conditionals in a single timestep
         age = state.spec.ageOfOldestConditional()
         if age and age > self._spec_window_size:
-            l.debug("%s now adding deferred conditional", self)
             cond = state.spec.popOldestConditional()
+            l.debug("time {}: adding deferred conditional (age {}): {}".format(state.spec.ins_executed, age, cond))
             state.add_constraints(cond)
             # See if the newly added constraint makes us unsat, if so, kill this state
             if angr.sim_options.LAZY_SOLVES not in state.options and not state.solver.satisfiable():
-                l.debug("killing mispredicted path")
+                l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
                 return False
 
         if type(stmt) == pyvex.IRStmt.IMark:
@@ -63,7 +63,7 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
         # handling conditional exits is where the magic happens
         if type(stmt) == pyvex.IRStmt.Exit:
-            l.debug("%s forking for conditional exit", self)
+            l.debug("time {}: forking for conditional exit to {} under guard {}".format(state.spec.ins_executed, s_stmt.target, s_stmt.guard))
 
             # Unlike normal SimEngineVEX, we always proceed down both sides of the branch
             # (to simulate possible wrong-path execution, i.e. branch misprediction)
@@ -74,8 +74,14 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
             branchcond = s_stmt.guard
             notbranchcond = claripy.Not(branchcond)
+            numconds = len(exit_state.spec.conditionals)
+            assert len(cont_state.spec.conditionals) == numconds
             exit_state.spec.append(branchcond)
+            assert len(exit_state.spec.conditionals) == numconds + 1
+            assert len(cont_state.spec.conditionals) == numconds
             cont_state.spec.append(notbranchcond)
+            assert len(cont_state.spec.conditionals) == numconds + 1
+            assert len(exit_state.spec.conditionals) == numconds + 1
 
             successors.add_successor(exit_state, s_stmt.target, s_stmt.guard, s_stmt.jumpkind, add_guard=False,
                                     exit_stmt_idx=state.scratch.stmt_idx, exit_ins_addr=state.scratch.ins_addr)
@@ -108,14 +114,14 @@ class SpecState(angr.SimStatePlugin):
     def __init__(self, ins=0, conds=None):
         super().__init__()
         self.ins_executed = ins  # we track this here because I couldn't find an existing place (e.g. state.history) where instructions are counted. This may miss instructions handled by other engines, but TODO that is presumably few?
-        if conds:
+        if conds is not None:
           self.conditionals = conds
         else:
           self.conditionals = collections.deque()
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
-        return SpecState(self.ins_executed, self.conditionals)
+        return SpecState(self.ins_executed, self.conditionals.copy())
 
     def tick(self):
         self.ins_executed += 1
