@@ -91,7 +91,7 @@ def concretization_succeeded(state):
 
 # Call during a breakpoint callback on 'address_concretization'
 def log_concretization(state):
-    def showWithOptAnnotations(x): return "{} (annotations {})".format(hex(x), x.annotations) if isinstance(x, claripy.ast.Base) else "{} (not an AST)".format(hex(x))
+    def showWithOptAnnotations(x): return "{} (annotations {})".format(hex(x), x.annotations) if isinstance(x, claripy.ast.Base) else hex(x)
     raw = state.inspect.address_concretization_expr
     concretized = "[{}]".format(', '.join(showWithOptAnnotations(x) for x in state.inspect.address_concretization_result))
     l.debug("concretized {} with annotations {} to {}".format(raw, raw.annotations, concretized))
