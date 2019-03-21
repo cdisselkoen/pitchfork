@@ -134,3 +134,15 @@ class OOBStrategy(angr.concretization_strategies.SimConcretizationStrategy):
         except angr.errors.SimUnsatError:
             # no solution
             return None
+
+class OOBViolationFilter(angr.exploration_techniques.ExplorationTechnique):
+    """
+    Exploration technique (which you can use on your SimulationManager if you want)
+    which puts all states with OOB violations in a special stash 'oob_violation'
+    """
+    def __init__(self):
+       super().__init__()
+
+    def filter(self, simgr, state, **kwargs):
+        if state.oob.violation: return 'oob_violation'
+        return simgr.filter(state, **kwargs)

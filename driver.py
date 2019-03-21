@@ -1,6 +1,6 @@
 from specvex import SimEngineSpecVEX, SpecState
-from oob import OOBState
-from spectre import SpectreOOBState, SpectreExplicitState
+from oob import OOBState, OOBViolationFilter
+from spectre import SpectreOOBState, SpectreExplicitState, SpectreViolationFilter
 
 import angr
 import claripy
@@ -232,22 +232,6 @@ def runState(proj, state, spec=True, window=None):
     simgr.run()
     print("running time: {}".format(time.process_time() - start))
     return simgr
-
-class OOBViolationFilter(angr.exploration_techniques.ExplorationTechnique):
-  def __init__(self):
-    super().__init__()
-
-  def filter(self, simgr, state, **kwargs):
-    if state.oob.violation: return 'oob_violation'
-    return simgr.filter(state, **kwargs)
-
-class SpectreViolationFilter(angr.exploration_techniques.ExplorationTechnique):
-  def __init__(self):
-    super().__init__()
-
-  def filter(self, simgr, state, **kwargs):
-    if state.spectre.violation: return 'spectre_violation'
-    return simgr.filter(state, **kwargs)
 
 # Useful utilities for interactive mode
 

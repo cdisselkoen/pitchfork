@@ -273,6 +273,18 @@ class TargetedStrategy(angr.concretization_strategies.SimConcretizationStrategy)
             # no solution
             return None
 
+class SpectreViolationFilter(angr.exploration_techniques.ExplorationTechnique):
+    """
+    Exploration technique (which you can use on your SimulationManager if you want)
+    which puts all states with Spectre violations in a special stash 'spectre_violation'
+    """
+    def __init__(self):
+        super().__init__()
+
+    def filter(self, simgr, state, **kwargs):
+        if state.spectre.violation: return 'spectre_violation'
+        return simgr.filter(state, **kwargs)
+
 class MySolver(angr.state_plugins.SimSolver):
     """
     A subclass just to add a single new accessor we need.
