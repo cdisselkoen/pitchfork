@@ -203,9 +203,9 @@ def armSpectreExplicitChecks(proj, state):
     state.spectre.arm(state)
     assert state.spectre.armed()
 
-def makeSpeculative(proj, state, window=1000):
+def makeSpeculative(proj, state, window=250):
     """
-    window: size of speculative window (~ROB) in VEX instructions. TODO make this x86 instructions
+    window: size of speculative window (~ROB) in x86 instructions.
     """
     proj.engines.register_plugin('specvex', SimEngineSpecVEX(window))
     proj.engines.order = ['specvex' if x=='vex' else x for x in proj.engines.order]  # replace 'vex' with 'specvex'
@@ -218,7 +218,7 @@ def makeSpeculative(proj, state, window=1000):
 def runState(proj, state, spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     start = time.process_time()
     if spec:
@@ -260,7 +260,7 @@ def showbbVEX(proj, bbaddr):
 def runTweetNaclCryptoSign(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_sign {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_sign()
@@ -270,7 +270,7 @@ def runTweetNaclCryptoSign(spec=True, window=None):
 def runTweetNaclCryptoSignKeypair(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_sign_keypair {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_sign_keypair()
@@ -280,7 +280,7 @@ def runTweetNaclCryptoSignKeypair(spec=True, window=None):
 def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_stream_salsa20 {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_stream_salsa20()
@@ -290,7 +290,7 @@ def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
 def runTweetNaclCryptoStreamXSalsa20(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_stream_xsalsa20 {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_stream_xsalsa20()
@@ -300,7 +300,7 @@ def runTweetNaclCryptoStreamXSalsa20(spec=True, window=None):
 def runTweetNaclCryptoOnetimeauth(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_onetimeauth {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_onetimeauth()
@@ -310,7 +310,7 @@ def runTweetNaclCryptoOnetimeauth(spec=True, window=None):
 def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_onetimeauth_verify {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_onetimeauth_verify()
@@ -320,7 +320,7 @@ def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
 def runTweetNaclCryptoSecretBox(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_secretbox {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_secretbox()
@@ -330,7 +330,7 @@ def runTweetNaclCryptoSecretBox(spec=True, window=None):
 def runTweetNaclCryptoSecretBoxOpen(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_secretbox_open {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_secretbox_open()
@@ -340,7 +340,7 @@ def runTweetNaclCryptoSecretBoxOpen(spec=True, window=None):
 def runTweetNaclCryptoBox(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_box {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_box()
@@ -350,7 +350,7 @@ def runTweetNaclCryptoBox(spec=True, window=None):
 def runTweetNaclCryptoBoxOpen(spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running TweetNaCl crypto_box_open {} speculative execution".format("with" if spec else "without"))
     proj,state = tweetnacl_crypto_box_open()
@@ -360,7 +360,7 @@ def runTweetNaclCryptoBoxOpen(spec=True, window=None):
 def runKocher(s, spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running Kocher test case {} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher(s)
@@ -370,7 +370,7 @@ def runKocher(s, spec=True, window=None):
 def runKocher11(s, spec=True, window=None):
     """
     spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
     l.info("Running Kocher test case 11{} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher11(s)
@@ -380,10 +380,10 @@ def runKocher11(s, spec=True, window=None):
 def runallTweetNacl(spec=True, window=None):
     return { "crypto_sign":runTweetNaclCryptoSign(spec=spec, window=window),
              "crypto_sign_keypair":runTweetNaclCryptoSignKeypair(spec=spec, window=window),
-             "crypto_stream_salsa20":runTweetNaclCryptoStreamSalsa20(spec=spec, window=window if window is not None else 100),  # different default due to long runtimes with default window size
+             "crypto_stream_salsa20":runTweetNaclCryptoStreamSalsa20(spec=spec, window=window),
              "crypto_stream_xsalsa20":runTweetNaclCryptoStreamXSalsa20(spec=spec, window=window),
-             "crypto_onetimeauth":runTweetNaclCryptoOnetimeauth(spec=spec, window=window if window is not None else 500),  # different default due to long runtimes with default window size
-             "crypto_onetimeauth_verify":runTweetNaclCryptoOnetimeauthVerify(spec=spec, window=window if window is not None else 500),  # different default due to long runtimes with default window size
+             "crypto_onetimeauth":runTweetNaclCryptoOnetimeauth(spec=spec, window=window),
+             "crypto_onetimeauth_verify":runTweetNaclCryptoOnetimeauthVerify(spec=spec, window=window),
              "crypto_secretbox":runTweetNaclCryptoSecretBox(spec=spec, window=window),
              "crypto_secretbox_open":runTweetNaclCryptoSecretBoxOpen(spec=spec, window=window),
              "crypto_box":runTweetNaclCryptoBox(spec=spec, window=window),
