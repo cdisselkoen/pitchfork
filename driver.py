@@ -8,6 +8,8 @@ import monkeyhex
 import logging
 l = logging.getLogger(name=__name__)
 
+import time
+
 logging.getLogger('angr.engines').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.vex.expressions').setLevel(logging.INFO)
 #logging.getLogger('angr.engines.unicorn').setLevel(logging.INFO)
@@ -218,6 +220,7 @@ def runState(proj, state, spec=True, window=None):
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in VEX instructions. None (the default) to use default value
     """
+    start = time.process_time()
     if spec:
         if window is not None: makeSpeculative(proj,state,window)
         else: makeSpeculative(proj,state)
@@ -227,6 +230,7 @@ def runState(proj, state, spec=True, window=None):
     if state.has_plugin('spectre'):
         simgr.use_technique(SpectreViolationFilter())
     simgr.run()
+    print("running time: {}".format(time.process_time() - start))
     return simgr
 
 class OOBViolationFilter(angr.exploration_techniques.ExplorationTechnique):
