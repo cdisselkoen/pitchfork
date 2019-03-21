@@ -229,8 +229,14 @@ def runState(proj, state, spec=True, window=None):
         simgr.use_technique(OOBViolationFilter())
     if state.has_plugin('spectre'):
         simgr.use_technique(SpectreViolationFilter())
-    simgr.run()
+    simgr.run(step_func=describeActiveStates)
     print("running time: {}".format(time.process_time() - start))
+    return simgr
+
+def describeActiveStates(simgr):
+    if len(simgr.active) == 0: l.info("no active states")
+    elif len(simgr.active) == 1: l.info("1 active state, at {}".format(hex(simgr.active[0].addr)))
+    else: l.info("{} active states, at {}".format(len(simgr.active), list(hex(s.addr) for s in simgr.active)))
     return simgr
 
 # Useful utilities for interactive mode
