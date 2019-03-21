@@ -132,14 +132,16 @@ class SpectreExplicitState(angr.SimStatePlugin):
         """
         return self._armed
 
+def describeAst(state, ast):
+    return "{} (TAINTED)".format(ast) if _is_tainted(state, ast) \
+            else "{} (not tainted, but with annotations {})".format(ast, ast.annotations) if ast.annotations \
+            else "{} (no annotations, untainted)".format(ast)
+
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
     addr = state.inspect.mem_read_address
     expr = state.inspect.mem_read_expr
-    def describeAst(ast): return "{} (TAINTED)".format(ast) if _is_tainted(state, ast) \
-                            else "{} (not tainted, but with annotations {})".format(ast, ast.annotations) if ast.annotations \
-                            else "{} (no annotations, untainted)".format(ast)
-    l.debug("read {} from {} {}".format(describeAst(expr), describeAst(addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
+    l.debug("read {} from {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
     if _is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)
@@ -156,10 +158,7 @@ def _tainted_read(state):
 def _tainted_write(state):
     addr = state.inspect.mem_write_address
     expr = state.inspect.mem_write_expr
-    def describeAst(ast): return "{} (TAINTED)".format(ast) if _is_tainted(state, ast) \
-                            else "{} (not tainted, but with annotations {})".format(ast, ast.annotations) if ast.annotations \
-                            else "{} (no annotations, untainted)".format(ast)
-    l.debug("wrote {} to {} {}".format(describeAst(expr), describeAst(addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
+    l.debug("wrote {} to {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
     if _is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)
@@ -206,18 +205,30 @@ def _is_immediately_tainted(ast):
     #return ast.uninitialized or any(isinstance(a, TaintedAnnotation) for a in ast.annotations)
 
 def detected_spectre_read(state):
-    print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Address {}\n  Value {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
-        state.inspect.mem_read_address, state.inspect.mem_read_expr, list(state.globals['args']), state.solver.constraints, state.inspect.mem_read_expr.annotations))
-    state.spectre.violation = (state.inspect.mem_read_address, state.inspect.mem_read_expr)
+    print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Instruction Address {}\n  Read Address {}\n  Read Value {}\n  args were {}\n  constraints were {}\n".format(
+        hex(state.addr),
+        describeAst(state, state.inspect.mem_read_address),
+        describeAst(state, state.inspect.mem_read_expr),
+        list(arg for (_, arg) in state.globals['args']),
+        state.solver.constraints))
+    state.spectre.violation = (state.addr, state.inspect.mem_read_address, state.inspect.mem_read_expr)
 
 def detected_spectre_write(state):
-    print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Address {}\n  Value {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
-        state.inspect.mem_write_address, state.inspect.mem_write_expr, list(state.globals['args']), state.solver.constraints, state.inspect.mem_write_expr.annotations))
-    state.spectre.violation = (state.inspect.mem_write_address, state.inspect.mem_write_expr)
+    print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Instruction Address {}\n  Write Address {}\n  Write Value {}\n  args were {}\n  constraints were {}\n".format(
+        hex(state.addr),
+        describeAst(state, state.inspect.mem_write_address),
+        describeAst(state, state.inspect.mem_write_expr),
+        list(arg for (_, arg) in state.globals['args']),
+        state.solver.constraints))
+    state.spectre.violation = (state.addr, state.inspect.mem_write_address, state.inspect.mem_write_expr)
 
 def detected_spectre_branch(state):
-    print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  args were {}\n  constraints were {}\n  annotations were {}\n".format(
-        hex(state.addr), state.inspect.exit_target, state.inspect.exit_guard, list(state.globals['args']), state.solver.constraints, state.inspect.exit_guard.annotations))
+    print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  args were {}\n  constraints were {}\n".format(
+        hex(state.addr),
+        state.inspect.exit_target,
+        describeAst(state, state.inspect.exit_guard),
+        list(arg for (_, arg) in state.globals['args']),
+        state.solver.constraints))
     state.spectre.violation = (state.addr, state.inspect.exit_target, state.inspect.exit_guard)
 
 class TaintedAnnotation(claripy.Annotation):
