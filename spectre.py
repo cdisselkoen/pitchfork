@@ -186,7 +186,7 @@ def detected_spectre_read(state):
         describeAst(state, state.inspect.mem_read_expr),
         state.globals['args'],
         state.solver.constraints))
-    state.spectre.violation = (state.addr, state.inspect.mem_read_address, state.inspect.mem_read_expr)
+    state.spectre.violation = ('read', state.addr, state.inspect.mem_read_address, state.inspect.mem_read_expr)
 
 def detected_spectre_write(state):
     print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Instruction Address {}\n  Write Address {}\n  Write Value {}\n  args were {}\n  constraints were {}\n".format(
@@ -195,7 +195,7 @@ def detected_spectre_write(state):
         describeAst(state, state.inspect.mem_write_expr),
         state.globals['args'],
         state.solver.constraints))
-    state.spectre.violation = (state.addr, state.inspect.mem_write_address, state.inspect.mem_write_expr)
+    state.spectre.violation = ('write', state.addr, state.inspect.mem_write_address, state.inspect.mem_write_expr)
 
 def detected_spectre_branch(state):
     print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  args were {}\n  constraints were {}\n".format(
@@ -204,7 +204,7 @@ def detected_spectre_branch(state):
         describeAst(state, state.inspect.exit_guard),
         state.globals['args'],
         state.solver.constraints))
-    state.spectre.violation = (state.addr, state.inspect.exit_target, state.inspect.exit_guard)
+    state.spectre.violation = ('branch', state.addr, state.inspect.exit_target, state.inspect.exit_guard)
 
 class TargetedStrategy(angr.concretization_strategies.SimConcretizationStrategy):
     """
