@@ -1,6 +1,8 @@
 import angr
 import claripy
 
+from utils import describeAst
+
 import logging
 l = logging.getLogger(name=__name__)
 
@@ -77,7 +79,6 @@ def can_be_oob(state, addr, length):
     inbounds_intervals = state.oob.inbounds_intervals + [get_stack_interval(state)]
     oob_constraints = [claripy.Or(addr < mn, addr+length > mx) for (mn,mx) in inbounds_intervals]
     if state.solver.satisfiable(extra_constraints=oob_constraints): return True  # there is a solution to current constraints such that the access is OOB
-    #l.debug("inbounds: {} >= {} and {} <= {}".format(addr, hexprint(mn), addr+length, hexprint(mx)))  # when you also take into account all the current constraints
     return False  # operation must be inbounds
 
 def get_stack_interval(state):
@@ -91,15 +92,9 @@ def concretization_succeeded(state):
 
 # Call during a breakpoint callback on 'address_concretization'
 def log_concretization(state):
-    def showWithOptAnnotations(x): return "{} (annotations {})".format(hex(x), x.annotations) if isinstance(x, claripy.ast.Base) else hex(x)
-    raw = state.inspect.address_concretization_expr
-    concretized = "[{}]".format(', '.join(showWithOptAnnotations(x) for x in state.inspect.address_concretization_result))
-    l.debug("concretized {} with annotations {} to {}".format(raw, raw.annotations, concretized))
-
-# print a claripy AST as-is, or if it's a Python int, print in hex
-def hexprint(val):
-    if isinstance(val, claripy.Base): return "{}".format(val)
-    else: return "0x{:02X}".format(val)
+    raw = describeAst(state, state.inspect.address_concretization_expr)
+    concretized = "[{}]".format(', '.join(describeAst(state, x) for x in state.inspect.address_concretization_result))
+    l.debug("concretized {} to {}".format(raw, concretized))
 
 def detected_oob_read(state):
     print("\n!!!!!!!! OUT-OF-BOUNDS READ !!!!!!!!\n  Address {}\n  Value {}\n  x={}\n  constraints were {}\n".format(

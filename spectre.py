@@ -4,6 +4,7 @@ import pyvex
 
 from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
 from taint import taintedUnconstrainedBits, is_tainted
+from utils import isAst, describeAst
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -107,7 +108,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
 
         secretStart = 0x1100000  # a should-be-unused part of the virtual memory space, after where CLE puts its 'externs' object
         for (mn,mx) in self.secretIntervals:
-            if isinstance(mn, claripy.ast.Base):
+            if isAst(mn):
                 if state.solver.solution(mn, secretStart):
                     mn_as_int = secretStart
                     state.solver.add(mn == mn_as_int)
@@ -132,11 +133,6 @@ class SpectreExplicitState(angr.SimStatePlugin):
         Has arm() been called?
         """
         return self._armed
-
-def describeAst(state, ast):
-    return "{} (TAINTED)".format(ast) if is_tainted(state, ast) \
-            else "{} (not tainted, but with annotations {})".format(ast, ast.annotations) if ast.annotations \
-            else "{} (no annotations, untainted)".format(ast)
 
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
