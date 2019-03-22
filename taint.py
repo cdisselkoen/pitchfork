@@ -1,3 +1,4 @@
+import angr
 import claripy
 
 class TaintedAnnotation(claripy.Annotation):
@@ -42,3 +43,30 @@ def _is_immediately_tainted(ast):
         #return True
     #return False
     return any(isinstance(a, TaintedAnnotation) for a in ast.annotations)
+
+class MySolver(angr.state_plugins.SimSolver):
+    """
+    A subclass just to add a single new accessor we need.
+    """
+
+    def leaves(self, v):
+        """
+        Given an AST, iterate over all the BVS leaves in the tree which are registered.
+        """
+        reverse_mapping = {next(iter(var.variables)): var for k,var in self.eternal_tracked_variables.items()}
+        reverse_mapping.update({next(iter(var.variables)): var for k,var in self.temporal_tracked_variables.items() if k[-1] is not None})
+
+        for var in v.variables:
+          if var in reverse_mapping:
+            yield reverse_mapping[var]
+
+    # Entirely copied from SimSolver's method, just constructs a MySolver instead of a SimSolver
+    @angr.SimStatePlugin.memo
+    def copy(self, memo):
+        return MySolver(solver=self._solver.branch(),
+                        all_variables=self.all_variables,
+                        temporal_tracked_variables=self.temporal_tracked_variables,
+                        eternal_tracked_variables=self.eternal_tracked_variables)
+
+# use MySolver instances instead of SimSolver
+MySolver.register_default('solver')
