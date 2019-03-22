@@ -32,9 +32,10 @@ def funcEntryState(proj, funcname, args):
             whether the data the argument points to is secret (True) or public (False)
     """
     funcaddr = proj.loader.find_symbol(funcname).rebased_addr
-    argBVSs = list(claripy.BVS("arg{}".format(i) if name is None else name, 64) for (i, (name, _, _)) in enumerate(args))
+    argnames = list("arg{}".format(i) if name is None else name for (i, (name, _, _)) in enumerate(args))
+    argBVSs = list(claripy.BVS(name, 64) for name in argnames)
     state = proj.factory.call_state(funcaddr, *argBVSs)
-    state.globals['args'] = list(zip(args, argBVSs))
+    state.globals['args'] = {argname:(argBVS, length, secret) for (argname, (_, length, secret), argBVS) in zip(argnames, args, argBVSs)}
     return state
 
 # Loading various binaries for testing
@@ -194,7 +195,7 @@ def armSpectreOOBChecks(proj,state):
 
 def armSpectreExplicitChecks(proj, state):
     args = state.globals['args']
-    secretPairs = ((arg,length) for (i,((name,length,secret),arg)) in enumerate(args) if secret)
+    secretPairs = ((arg,length) for (name,(arg,length,secret)) in args.items() if secret)
     secretIntervals = ((arg, arg+length) for (arg,length) in secretPairs)
     state.register_plugin('spectre', SpectreExplicitState(secretIntervals))
     state.spectre.arm(state)

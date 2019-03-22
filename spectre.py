@@ -184,7 +184,7 @@ def detected_spectre_read(state):
         hex(state.addr),
         describeAst(state, state.inspect.mem_read_address),
         describeAst(state, state.inspect.mem_read_expr),
-        list(arg for (_, arg) in state.globals['args']),
+        state.globals['args'],
         state.solver.constraints))
     state.spectre.violation = (state.addr, state.inspect.mem_read_address, state.inspect.mem_read_expr)
 
@@ -193,7 +193,7 @@ def detected_spectre_write(state):
         hex(state.addr),
         describeAst(state, state.inspect.mem_write_address),
         describeAst(state, state.inspect.mem_write_expr),
-        list(arg for (_, arg) in state.globals['args']),
+        state.globals['args'],
         state.solver.constraints))
     state.spectre.violation = (state.addr, state.inspect.mem_write_address, state.inspect.mem_write_expr)
 
@@ -202,7 +202,7 @@ def detected_spectre_branch(state):
         hex(state.addr),
         state.inspect.exit_target,
         describeAst(state, state.inspect.exit_guard),
-        list(arg for (_, arg) in state.globals['args']),
+        state.globals['args'],
         state.solver.constraints))
     state.spectre.violation = (state.addr, state.inspect.exit_target, state.inspect.exit_guard)
 
