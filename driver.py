@@ -38,6 +38,9 @@ def funcEntryState(proj, funcname, args):
     state.globals['args'] = {argname:(argBVS, length, secret) for (argname, (_, length, secret), argBVS) in zip(argnames, args, argBVSs)}
     return state
 
+def getArgBVS(state, argname):
+    return state.globals['args'][argname][0]
+
 # Loading various binaries for testing
 
 def fauxware():
@@ -76,7 +79,11 @@ def blatantOOB():
     state = funcEntryState(proj, "victim_function_v01", 1)
     return (proj, state)
 
-def tweetnacl_crypto_sign():
+def tweetnacl_crypto_sign(max_messagelength=256):
+    """
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet", [
         ("sm", None, False),  # signed message: Output parameter, buffer of at least size [length m] + 64
@@ -85,6 +92,25 @@ def tweetnacl_crypto_sign():
         ("mlen", None, False),  # message length: length of m. Not a pointer.
         ("sk", 64, True),  # secret key: size 64 bytes
     ])
+    state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
+    return (proj, state)
+
+def tweetnacl_crypto_sign_open(max_messagelength=256):
+    """
+    note that this function *does not handle any secret inputs* so it probably isn't necessary
+        to analyze. Still included for completeness.
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
+    proj = angr.Project('tweetnacl/tweetnacl.o')
+    state = funcEntryState(proj, "crypto_sign_ed25519_tweet_open", [
+        ("m", None, False),  # Output parameter: message, buffer of at least size 'smlen'
+        ("mlen", 8, False),  # Output parameter where the actual length of m is written
+        ("sm", None, False),  # Signed message: length 'smlen'
+        ("smlen", None, False),  # signed message length: length of 'sm'. Not a pointer.
+        ("pk", 32, False)  # public key: size crypto_sign_PUBLICKEYBYTES
+    ])
+    state.add_constraints(getArgBVS(state, 'smlen') <= max_messagelength)
     return (proj, state)
 
 def tweetnacl_crypto_sign_keypair():
@@ -93,7 +119,12 @@ def tweetnacl_crypto_sign_keypair():
         [("pk", 32, False), ("sk", 64, True)])
     return (proj, state)
 
-def tweetnacl_crypto_stream_salsa20():
+def tweetnacl_crypto_stream_salsa20(max_outputbytes=128):
+    """
+    crypto_stream_salsa20 produces a continuous stream of output.
+    max_outputbytes: maximum value of the 'clen' parameter which determines the output size
+        i.e., the symbolic execution will not consider values of 'clen' larger than max_outputbytes
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_stream_salsa20_tweet", [
         ("c", None, False),  # Output parameter, buffer of size clen
@@ -101,9 +132,15 @@ def tweetnacl_crypto_stream_salsa20():
         ("n", 8, False),  # nonce, buffer of size crypto_stream_salsa20_tweet_NONCEBYTES
         ("k", 32, True)  # secret key: size 32 bytes
     ])
+    state.add_constraints(getArgBVS(state, 'clen') <= max_outputbytes)
     return (proj, state)
 
-def tweetnacl_crypto_stream_xsalsa20():
+def tweetnacl_crypto_stream_xsalsa20(max_outputbytes=128):
+    """
+    crypto_stream_xsalsa20 produces a continuous stream of output.
+    max_outputbytes: maximum value of the 'clen' parameter which determines the output size
+        i.e., the symbolic execution will not consider values of 'clen' larger than max_outputbytes
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_stream_xsalsa20_tweet", [
         ("c", None, False),  # Output parameter, buffer of size clen
@@ -111,9 +148,14 @@ def tweetnacl_crypto_stream_xsalsa20():
         ("n", 24, False),  # nonce, buffer of size crypto_stream_xsalsa20_tweet_NONCEBYTES
         ("k", 32, True)  # secret key: size 32 bytes
     ])
+    state.add_constraints(getArgBVS(state, 'clen') <= max_outputbytes)
     return (proj, state)
 
-def tweetnacl_crypto_onetimeauth():
+def tweetnacl_crypto_onetimeauth(max_messagelength=256):
+    """
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet", [
         ("a", 16, False),  # Output parameter, gets authenticator, size crypto_onetimeauth_BYTES
@@ -121,9 +163,14 @@ def tweetnacl_crypto_onetimeauth():
         ("mlen", None, False),  # length of message. Not a pointer
         ("k", 32, True)  # secret key: size 32 bytes
     ])
+    state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     return (proj, state)
 
-def tweetnacl_crypto_onetimeauth_verify():
+def tweetnacl_crypto_onetimeauth_verify(max_messagelength=256):
+    """
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet_verify", [
         ("a", 16, False),  # authenticator, size crypto_onetimeauth_BYTES
@@ -131,9 +178,14 @@ def tweetnacl_crypto_onetimeauth_verify():
         ("mlen", None, False),  # length of message. Not a pointer
         ("k", 32, True)  # secret key: size 32 bytes
     ])
+    state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     return (proj, state)
 
-def tweetnacl_crypto_secretbox():
+def tweetnacl_crypto_secretbox(max_messagelength=256):
+    """
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_secretbox_xsalsa20poly1305_tweet", [
         ("c", None, False),  # Output parameter, will hold ciphertext, length 'mlen'
@@ -142,9 +194,14 @@ def tweetnacl_crypto_secretbox():
         ("n", 24, False),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
         ("k", 32, True)  # secret key: size 32 bytes
     ])
+    state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     return (proj, state)
 
-def tweetnacl_crypto_secretbox_open():
+def tweetnacl_crypto_secretbox_open(max_messagelength=256):
+    """
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_secretbox_xsalsa20poly1305_tweet_open", [
         ("m", None, False),  # Output parameter, will hold plaintext, length 'clen'
@@ -153,9 +210,14 @@ def tweetnacl_crypto_secretbox_open():
         ("n", 24, False),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
         ("k", 32, True)  # secret key: size 32 bytes
     ])
+    state.add_constraints(getArgBVS(state, 'clen') <= max_messagelength)
     return (proj, state)
 
-def tweetnacl_crypto_box():
+def tweetnacl_crypto_box(max_messagelength=256):
+    """
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_box_curve25519xsalsa20poly1305_tweet", [
         ("c", None, False),  # Output parameter, will hold ciphertext, length 'mlen'
@@ -165,9 +227,14 @@ def tweetnacl_crypto_box():
         ("pk", 32, False),  # public key, size crypto_box_PUBLICKEYBYTES
         ("sk", 32, True)  # secret key, size crypto_box_SECRETKEYBYTES
     ])
+    state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     return (proj, state)
 
-def tweetnacl_crypto_box_open():
+def tweetnacl_crypto_box_open(max_messagelength=256):
+    """
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
     proj = angr.Project('tweetnacl/tweetnacl.o')
     state = funcEntryState(proj, "crypto_box_curve25519xsalsa20poly1305_tweet_open", [
         ("m", None, False),  # Output parameter, will hold plaintext, length 'clen'
@@ -177,6 +244,7 @@ def tweetnacl_crypto_box_open():
         ("pk", 32, False),  # public key, size crypto_box_PUBLICKEYBYTES
         ("sk", 32, True)  # secret key, size crypto_box_SECRETKEYBYTES
     ])
+    state.add_constraints(getArgBVS(state, 'clen') <= max_messagelength)
     return (proj, state)
 
 # Set up checking
