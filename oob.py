@@ -94,7 +94,7 @@ def concretization_succeeded(state):
 def log_concretization(state):
     raw = describeAst(state, state.inspect.address_concretization_expr)
     concretized = "[{}]".format(', '.join(describeAst(state, x) for x in state.inspect.address_concretization_result))
-    l.debug("concretized {} to {}".format(raw, concretized))
+    l.debug("instr {}: concretized {} to {}".format(hex(state.addr), raw, concretized))
 
 def detected_oob_read(state):
     print("\n!!!!!!!! OUT-OF-BOUNDS READ !!!!!!!!\n  Address {}\n  Value {}\n  x={}\n  constraints were {}\n".format(
