@@ -74,14 +74,8 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
             branchcond = s_stmt.guard
             notbranchcond = claripy.Not(branchcond)
-            numconds = len(exit_state.spec.conditionals)
-            assert len(cont_state.spec.conditionals) == numconds
-            exit_state.spec.append(branchcond)
-            assert len(exit_state.spec.conditionals) == numconds + 1
-            assert len(cont_state.spec.conditionals) == numconds
-            cont_state.spec.append(notbranchcond)
-            assert len(cont_state.spec.conditionals) == numconds + 1
-            assert len(exit_state.spec.conditionals) == numconds + 1
+            if not state.solver.is_true(branchcond): exit_state.spec.append(branchcond)  # don't bother adding a deferred 'True' constraint
+            if not state.solver.is_true(notbranchcond): cont_state.spec.append(notbranchcond)  # don't bother adding a deferred 'True' constraint
 
             successors.add_successor(exit_state, s_stmt.target, s_stmt.guard, s_stmt.jumpkind, add_guard=False,
                                     exit_stmt_idx=state.scratch.stmt_idx, exit_ins_addr=state.scratch.ins_addr)
