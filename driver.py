@@ -79,12 +79,15 @@ def blatantOOB():
     state = funcEntryState(proj, "victim_function_v01", 1)
     return (proj, state)
 
+def tweetnaclProject():
+    return angr.Project('tweetnacl/testbinaryO3')
+
 def tweetnacl_crypto_sign(max_messagelength=256):
     """
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet", [
         ("sm", None, False),  # signed message: Output parameter, buffer of at least size [length m] + 64
         ("smlen", 8, False),  # signed message length: Output parameter where the actual length of sm is written
@@ -102,7 +105,7 @@ def tweetnacl_crypto_sign_open(max_messagelength=256):
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_open", [
         ("m", None, False),  # Output parameter: message, buffer of at least size 'smlen'
         ("mlen", 8, False),  # Output parameter where the actual length of m is written
@@ -114,7 +117,7 @@ def tweetnacl_crypto_sign_open(max_messagelength=256):
     return (proj, state)
 
 def tweetnacl_crypto_sign_keypair():
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_keypair",
         [("pk", 32, False), ("sk", 64, True)])
     return (proj, state)
@@ -125,7 +128,7 @@ def tweetnacl_crypto_stream_salsa20(max_outputbytes=128):
     max_outputbytes: maximum value of the 'clen' parameter which determines the output size
         i.e., the symbolic execution will not consider values of 'clen' larger than max_outputbytes
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_stream_salsa20_tweet", [
         ("c", None, False),  # Output parameter, buffer of size clen
         ("clen", None, False),  # length of the 'c' output buffer
@@ -141,7 +144,7 @@ def tweetnacl_crypto_stream_xsalsa20(max_outputbytes=128):
     max_outputbytes: maximum value of the 'clen' parameter which determines the output size
         i.e., the symbolic execution will not consider values of 'clen' larger than max_outputbytes
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_stream_xsalsa20_tweet", [
         ("c", None, False),  # Output parameter, buffer of size clen
         ("clen", None, False),  # length of 'c' output buffer
@@ -156,7 +159,7 @@ def tweetnacl_crypto_onetimeauth(max_messagelength=256):
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet", [
         ("a", 16, False),  # Output parameter, gets authenticator, size crypto_onetimeauth_BYTES
         ("m", None, False),  # message: unconstrained length
@@ -171,7 +174,7 @@ def tweetnacl_crypto_onetimeauth_verify(max_messagelength=256):
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet_verify", [
         ("a", 16, False),  # authenticator, size crypto_onetimeauth_BYTES
         ("m", None, False),  # message: unconstrained length
@@ -186,7 +189,7 @@ def tweetnacl_crypto_secretbox(max_messagelength=256):
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_secretbox_xsalsa20poly1305_tweet", [
         ("c", None, False),  # Output parameter, will hold ciphertext, length 'mlen'
         ("m", None, False),  # message: length 'mlen'
@@ -202,7 +205,7 @@ def tweetnacl_crypto_secretbox_open(max_messagelength=256):
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_secretbox_xsalsa20poly1305_tweet_open", [
         ("m", None, False),  # Output parameter, will hold plaintext, length 'clen'
         ("c", None, False),  # ciphertext, length 'clen'
@@ -218,7 +221,7 @@ def tweetnacl_crypto_box(max_messagelength=256):
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_box_curve25519xsalsa20poly1305_tweet", [
         ("c", None, False),  # Output parameter, will hold ciphertext, length 'mlen'
         ("m", None, False),  # message: length 'mlen'
@@ -235,7 +238,7 @@ def tweetnacl_crypto_box_open(max_messagelength=256):
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
     """
-    proj = angr.Project('tweetnacl/tweetnacl.o')
+    proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_box_curve25519xsalsa20poly1305_tweet_open", [
         ("m", None, False),  # Output parameter, will hold plaintext, length 'clen'
         ("c", None, False),  # ciphertext: length 'clen'
