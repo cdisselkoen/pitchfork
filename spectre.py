@@ -99,7 +99,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
 
         state.memory.read_strategies.insert(0, TargetedStrategy(self.secretIntervals))
         state.memory.write_strategies.insert(0, TargetedStrategy(self.secretIntervals))
-        state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
+        #state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
 
         state.options.add(angr.options.SYMBOLIC_WRITE_ADDRESSES)
         state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY)
@@ -138,7 +138,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
 def _tainted_read(state):
     addr = state.inspect.mem_read_address
     expr = state.inspect.mem_read_expr
-    l.debug("read {} from {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
+    #l.debug("read {} from {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
     if is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)
@@ -155,7 +155,7 @@ def _tainted_read(state):
 def _tainted_write(state):
     addr = state.inspect.mem_write_address
     expr = state.inspect.mem_write_expr
-    l.debug("wrote {} to {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
+    #l.debug("wrote {} to {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
     if is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)
