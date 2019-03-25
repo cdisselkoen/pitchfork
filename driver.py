@@ -11,7 +11,9 @@ l = logging.getLogger(name=__name__)
 
 import time
 
-logging.getLogger('specvex').setLevel(logging.DEBUG)
+#logging.getLogger('angr.state_plugins.symbolic_memory').setLevel(logging.DEBUG)
+#logging.getLogger('angr.engines').setLevel(logging.INFO)
+#logging.getLogger('specvex').setLevel(logging.DEBUG)
 logging.getLogger('spectre').setLevel(logging.INFO)
 logging.getLogger('oob').setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.INFO)
