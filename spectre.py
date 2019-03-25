@@ -170,7 +170,10 @@ def _tainted_write(state):
 
 # Call during a breakpoint callback on 'exit' (i.e. conditional branch)
 def _tainted_branch(state):
-    return is_tainted(state, state.inspect.exit_guard)
+    guard = state.inspect.exit_guard
+    return is_tainted(state, guard) and \
+        state.solver.satisfiable(extra_constraints=[guard == True]) and \
+        state.solver.satisfiable(extra_constraints=[guard == False])
 
 # Can the given ast resolve to an address that points to secret memory
 def _can_point_to_secret(state, ast):
