@@ -290,7 +290,7 @@ def runState(proj, state, spec=True, window=None):
     if spec:
         if window is not None: makeSpeculative(proj,state,window)
         else: makeSpeculative(proj,state)
-    simgr = proj.factory.simgr(state, save_unsat=True)
+    simgr = proj.factory.simgr(state, save_unsat=False)
     if state.has_plugin('oob'):
         simgr.use_technique(OOBViolationFilter())
     if state.has_plugin('spectre'):
