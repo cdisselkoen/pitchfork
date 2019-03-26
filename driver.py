@@ -84,12 +84,15 @@ def blatantOOB():
 def tweetnaclProject():
     return angr.Project('tweetnacl/testbinaryO3')
 
-def tweetnacl_crypto_sign(max_messagelength=256):
+def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     """
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
+    with_hash_stub: if True, then use a stub for the SHA512 hash function rather than
+        trying to analyze it directly
     """
     proj = tweetnaclProject()
+    if with_hash_stub: addHashStub(proj)
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet", [
         ("sm", None, False),  # signed message: Output parameter, buffer of at least size [length m] + 64
         ("smlen", 8, False),  # signed message length: Output parameter where the actual length of sm is written
@@ -101,14 +104,17 @@ def tweetnacl_crypto_sign(max_messagelength=256):
     addDevURandom(state)
     return (proj, state)
 
-def tweetnacl_crypto_sign_open(max_messagelength=256):
+def tweetnacl_crypto_sign_open(max_messagelength=256, with_hash_stub=True):
     """
     note that this function *does not handle any secret inputs* so it probably isn't necessary
         to analyze. Still included for completeness.
     max_messagelength: maximum length of the message, in bytes.
         i.e., the symbolic execution will not consider messages longer than max_messagelength
+    with_hash_stub: if True, then use a stub for the SHA512 hash function rather than
+        trying to analyze it directly
     """
     proj = tweetnaclProject()
+    if with_hash_stub: addHashStub(proj)
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_open", [
         ("m", None, False),  # Output parameter: message, buffer of at least size 'smlen'
         ("mlen", 8, False),  # Output parameter where the actual length of m is written
@@ -120,8 +126,13 @@ def tweetnacl_crypto_sign_open(max_messagelength=256):
     addDevURandom(state)
     return (proj, state)
 
-def tweetnacl_crypto_sign_keypair():
+def tweetnacl_crypto_sign_keypair(with_hash_stub=True):
+    """
+    with_hash_stub: if True, then use a stub for the SHA512 hash function rather than
+        trying to analyze it directly
+    """
     proj = tweetnaclProject()
+    if with_hash_stub: addHashStub(proj)
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_keypair",
         [("pk", 32, False), ("sk", 64, True)])
     addDevURandom(state)
@@ -281,12 +292,25 @@ def tweetnacl_crypto_box_open(max_messagelength=256):
     addDevURandom(state)
     return (proj, state)
 
+# Useful approximations to make analysis more tractable
+
 def addDevURandom(state):
     # we don't need the data in /dev/urandom to be symbolic, any concrete data should do
     devurandom = angr.SimFile("devurandom", writable=False, concrete=True, has_end=True,  # if /dev/urandom actually gets to the end of this string and returns EOF, we want to be notified and have things fail rather than have it just invisibly generate symbolic data
         content="fdjkslaiuoewouriejaklhewf,masdnm,fuiorewewrhewjlfawjjkl!$RU(!KshjkLAFjfsdu*(SD(*(*(Asafdlksfjfsisefiklsdanm,fsdhjksfesijlfjesfes,se,esf,jkflesejiolflajiewmn,.waehjkowaejhfofyoivnm,cxhvgudyviuovnxcvncvixocjvsidooiI*DVJSKLFE*#L@N#@$$*Dsjklfjksd8fds9#WU*#(R@$JMksldfjfsd89J*F(F#KLJRJ*(RW")
     state.fs.insert('/dev/urandom', devurandom)
     state.options.discard(angr.options.SHORT_READS)
+
+class HashStub(angr.SimProcedure):
+    def run(self, h, m, mlen):
+        l.info("stubbing out a call to crypto_hash or crypto_hashblocks")
+        for i in range(8):  # 8 uint64_t's to fill 64 bytes
+            self.state.mem[h + i*8].uint64_t = self.state.solver.Unconstrained("hash_result", 64, uninitialized=False)
+        return 0
+
+def addHashStub(proj):
+    proj.hook_symbol("crypto_hash_sha512_tweet", HashStub())
+    proj.hook_symbol("crypto_hashblocks_sha512_tweet", HashStub())
 
 # Set up checking
 
