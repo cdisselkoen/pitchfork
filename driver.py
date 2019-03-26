@@ -322,12 +322,11 @@ def makeSpeculative(proj, state, window=250):
     state.register_plugin('spec', SpecState())
     assert state.spec.ins_executed == 0
 
-def runState(proj, state, spec=True, window=None):
+def getSimgr(proj, state, spec=True, window=None):
     """
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
-    start = time.process_time()
     if spec:
         if window is not None: makeSpeculative(proj,state,window)
         else: makeSpeculative(proj,state)
@@ -336,6 +335,10 @@ def runState(proj, state, spec=True, window=None):
         simgr.use_technique(OOBViolationFilter())
     if state.has_plugin('spectre'):
         simgr.use_technique(SpectreViolationFilter())
+    return simgr
+
+def runSimgr(simgr):
+    start = time.process_time()
     simgr.run(step_func=describeActiveStates)
     print("running time: {}".format(time.process_time() - start))
     return simgr
@@ -348,87 +351,96 @@ def describeActiveStates(simgr):
 
 # 'Driver' functions
 
-def _runTweetNacl(getProjState, funcname, spec=True, window=None):
+def _tweetNaclSimgr(getProjState, funcname, spec=True, window=None, run=True):
     """
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    run: if True, runs the simgr before returning it
     """
     l.info("Running TweetNaCl {} {} speculative execution".format(funcname, "with" if spec else "without"))
     proj,state = getProjState()
     armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    simgr = getSimgr(proj, state, spec=spec, window=window)
+    if run: return runSimgr(simgr)
+    else: return simgr
 
 """
-For docs on the arguments to all of the below TweetNaCl functions see docs on _runTweetNacl()
+For docs on the arguments to all of the below TweetNaCl functions see docs on _tweetNaclSimgr()
 """
 
-def runTweetNaclCryptoSign(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_sign, "crypto_sign", spec=spec, window=window)
+def cryptoSignSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_sign, "crypto_sign", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoSignKeypair(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_sign_keypair, "crypto_sign_keypair", spec=spec, window=window)
+def cryptoSignKeypairSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_sign_keypair, "crypto_sign_keypair", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoSignOpen(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_sign_open, "crypto_sign_open", spec=spec, window=window)
+def cryptoSignOpenSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_sign_open, "crypto_sign_open", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoHash(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_hash, "crypto_hash", spec=spec, window=window)
+def cryptoHashSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_hash, "crypto_hash", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_stream_salsa20, "crypto_stream_salsa20", spec=spec, window=window)
+def cryptoStreamSalsa20Simgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_stream_salsa20, "crypto_stream_salsa20", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoStreamXSalsa20(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_stream_xsalsa20, "crypto_stream_xsalsa20", spec=spec, window=window)
+def cryptoStreamXSalsa20Simgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_stream_xsalsa20, "crypto_stream_xsalsa20", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoOnetimeauth(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_onetimeauth, "crypto_onetimeauth", spec=spec, window=window)
+def cryptoOnetimeauthSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_onetimeauth, "crypto_onetimeauth", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_onetimeauth_verify, "crypto_onetimeauth_verify", spec=spec, window=window)
+def cryptoOnetimeauthVerifySimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_onetimeauth_verify, "crypto_onetimeauth_verify", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoSecretBox(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_secretbox, "crypto_secretbox", spec=spec, window=window)
+def cryptoSecretBoxSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_secretbox, "crypto_secretbox", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoSecretBoxOpen(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_secretbox_open, "crypto_secretbox_open", spec=spec, window=window)
+def cryptoSecretBoxOpenSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_secretbox_open, "crypto_secretbox_open", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoBox(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_box, "crypto_box", spec=spec, window=window)
+def cryptoBoxSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_box, "crypto_box", spec=spec, window=window, run=run)
 
-def runTweetNaclCryptoBoxOpen(spec=True, window=None):
-    return _runTweetNacl(tweetnacl_crypto_box_open, "crypto_box_open", spec=spec, window=window)
+def cryptoBoxOpenSimgr(spec=True, window=None, run=True):
+    return _tweetNaclSimgr(tweetnacl_crypto_box_open, "crypto_box_open", spec=spec, window=window, run=run)
 
-def runKocher(s, spec=True, window=None):
+def kocherSimgr(s, spec=True, window=None, run=True):
     """
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    run: if True, runs the simgr before returning it
     """
     l.info("Running Kocher test case {} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher(s)
     armSpectreOOBChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    simgr = getSimgr(proj, state, spec=spec, window=window)
+    if run: return runSimgr(simgr)
+    else: return simgr
 
-def runKocher11(s, spec=True, window=None):
+def kocher11Simgr(s, spec=True, window=None, run=True):
     """
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    run: if True, runs the simgr before returning it
     """
     l.info("Running Kocher test case 11{} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher11(s)
     armSpectreOOBChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    simgr = getSimgr(proj, state, spec=spec, window=window)
+    if run: return runSimgr(simgr)
+    else: return simgr
 
 def runallTweetNacl(spec=True, window=None):
-    return { "crypto_sign":runTweetNaclCryptoSign(spec=spec, window=window),
-             "crypto_sign_keypair":runTweetNaclCryptoSignKeypair(spec=spec, window=window),
-             "crypto_stream_salsa20":runTweetNaclCryptoStreamSalsa20(spec=spec, window=window),
-             "crypto_stream_xsalsa20":runTweetNaclCryptoStreamXSalsa20(spec=spec, window=window),
-             "crypto_onetimeauth":runTweetNaclCryptoOnetimeauth(spec=spec, window=window),
-             "crypto_onetimeauth_verify":runTweetNaclCryptoOnetimeauthVerify(spec=spec, window=window),
-             "crypto_secretbox":runTweetNaclCryptoSecretBox(spec=spec, window=window),
-             "crypto_secretbox_open":runTweetNaclCryptoSecretBoxOpen(spec=spec, window=window),
-             "crypto_box":runTweetNaclCryptoBox(spec=spec, window=window),
-             "crypto_box_open":runTweetNaclCryptoBoxOpen(spec=spec, window=window)
+    return { "crypto_sign":cryptoSignSimgr(spec=spec, window=window),
+             "crypto_sign_keypair":cryptoSignKeypairSimgr(spec=spec, window=window),
+             "crypto_stream_salsa20":cryptoStreamSalsa20Simgr(spec=spec, window=window),
+             "crypto_stream_xsalsa20":cryptoStreamXSalsa20Simgr(spec=spec, window=window),
+             "crypto_onetimeauth":cryptoOnetimeauthSimgr(spec=spec, window=window),
+             "crypto_onetimeauth_verify":cryptoOnetimeauthVerifySimgr(spec=spec, window=window),
+             "crypto_secretbox":cryptoSecretBoxSimgr(spec=spec, window=window),
+             "crypto_secretbox_open":cryptoSecretBoxOpenSimgr(spec=spec, window=window),
+             "crypto_box":cryptoBoxSimgr(spec=spec, window=window),
+             "crypto_box_open":cryptoBoxOpenSimgr(spec=spec, window=window)
            }
 
 def runallKocher(spec=True, window=None):
@@ -444,8 +456,8 @@ def runallKocher(spec=True, window=None):
         #   should be, i.e. any state that could persist across runKocher() calls.
         # (wishing for a language like Haskell or Rust where functions can't have
         #   arbitrary global side effects and we can't have hidden global mutable state)
-        {s:runKocher(s, spec=spec, window=window) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
-        {('11'+s):runKocher11(s, spec=spec, window=window) for s in ['gcc','ker','sub']})
+        {s:kocherSimgr(s, spec=spec, window=window) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
+        {('11'+s):kocher11Simgr(s, spec=spec, window=window) for s in ['gcc','ker','sub']})
 
 def alltests(kocher=True, tweetnacl=True):
     """
