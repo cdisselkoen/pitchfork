@@ -348,125 +348,55 @@ def describeActiveStates(simgr):
 
 # 'Driver' functions
 
-def runTweetNaclCryptoSign(spec=True, window=None):
+def _runTweetNacl(getProjState, funcname, spec=True, window=None):
     """
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     """
-    l.info("Running TweetNaCl crypto_sign {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_sign()
+    l.info("Running TweetNaCl {} {} speculative execution".format(funcname, "with" if spec else "without"))
+    proj,state = getProjState()
     armSpectreExplicitChecks(proj,state)
     return runState(proj, state, spec=spec, window=window)
+
+"""
+For docs on the arguments to all of the below TweetNaCl functions see docs on _runTweetNacl()
+"""
+
+def runTweetNaclCryptoSign(spec=True, window=None):
+    return _runTweetNacl(tweetnacl_crypto_sign, "crypto_sign", spec=spec, window=window)
 
 def runTweetNaclCryptoSignKeypair(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_sign_keypair {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_sign_keypair()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_sign_keypair, "crypto_sign_keypair", spec=spec, window=window)
 
 def runTweetNaclCryptoSignOpen(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_sign_open {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_sign_open()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_sign_open, "crypto_sign_open", spec=spec, window=window)
 
 def runTweetNaclCryptoHash(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_hash {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_hash()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_hash, "crypto_hash", spec=spec, window=window)
 
 def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_stream_salsa20 {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_stream_salsa20()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_stream_salsa20, "crypto_stream_salsa20", spec=spec, window=window)
 
 def runTweetNaclCryptoStreamXSalsa20(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_stream_xsalsa20 {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_stream_xsalsa20()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_stream_xsalsa20, "crypto_stream_xsalsa20", spec=spec, window=window)
 
 def runTweetNaclCryptoOnetimeauth(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_onetimeauth {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_onetimeauth()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_onetimeauth, "crypto_onetimeauth", spec=spec, window=window)
 
 def runTweetNaclCryptoOnetimeauthVerify(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_onetimeauth_verify {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_onetimeauth_verify()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_onetimeauth_verify, "crypto_onetimeauth_verify", spec=spec, window=window)
 
 def runTweetNaclCryptoSecretBox(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_secretbox {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_secretbox()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_secretbox, "crypto_secretbox", spec=spec, window=window)
 
 def runTweetNaclCryptoSecretBoxOpen(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_secretbox_open {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_secretbox_open()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_secretbox_open, "crypto_secretbox_open", spec=spec, window=window)
 
 def runTweetNaclCryptoBox(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_box {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_box()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_box, "crypto_box", spec=spec, window=window)
 
 def runTweetNaclCryptoBoxOpen(spec=True, window=None):
-    """
-    spec: whether to enable speculative execution
-    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
-    """
-    l.info("Running TweetNaCl crypto_box_open {} speculative execution".format("with" if spec else "without"))
-    proj,state = tweetnacl_crypto_box_open()
-    armSpectreExplicitChecks(proj,state)
-    return runState(proj, state, spec=spec, window=window)
+    return _runTweetNacl(tweetnacl_crypto_box_open, "crypto_box_open", spec=spec, window=window)
 
 def runKocher(s, spec=True, window=None):
     """
