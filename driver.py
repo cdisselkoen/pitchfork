@@ -373,9 +373,15 @@ def runSimgr(simgr):
     return simgr
 
 def describeActiveStates(simgr):
-    if len(simgr.active) == 0: l.info("no active states")
-    elif len(simgr.active) == 1: l.info("1 active state, at {}".format(hex(simgr.active[0].addr)))
-    else: l.info("{} active states, at {}".format(len(simgr.active), list(hex(s.addr) for s in simgr.active)))
+    if len(simgr.active) == 0: logstring = "no active states"
+    elif len(simgr.active) == 1: logstring = "1 active state, at {}".format(hex(simgr.active[0].addr))
+    else: logstring = "{} active states, at {}".format(len(simgr.active), list(hex(s.addr) for s in simgr.active))
+    if 'deadended' in simgr.stashes and len(simgr.deadended) > 0:
+        if len(simgr.deadended) == 1:
+            logstring += "; 1 state finished"
+        else:
+            logstring += "; {} states finished".format(len(simgr.deadended))
+    l.info(logstring)
     return simgr
 
 # 'Driver' functions
