@@ -98,6 +98,7 @@ def tweetnacl_crypto_sign(max_messagelength=256):
         ("sk", 64, True),  # secret key: size 64 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_sign_open(max_messagelength=256):
@@ -116,12 +117,14 @@ def tweetnacl_crypto_sign_open(max_messagelength=256):
         ("pk", 32, False)  # public key: size crypto_sign_PUBLICKEYBYTES
     ])
     state.add_constraints(getArgBVS(state, 'smlen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_sign_keypair():
     proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_keypair",
         [("pk", 32, False), ("sk", 64, True)])
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_stream_salsa20(max_outputbytes=128):
@@ -138,6 +141,7 @@ def tweetnacl_crypto_stream_salsa20(max_outputbytes=128):
         ("k", 32, True)  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_outputbytes)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_stream_xsalsa20(max_outputbytes=128):
@@ -154,6 +158,7 @@ def tweetnacl_crypto_stream_xsalsa20(max_outputbytes=128):
         ("k", 32, True)  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_outputbytes)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_onetimeauth(max_messagelength=256):
@@ -169,6 +174,7 @@ def tweetnacl_crypto_onetimeauth(max_messagelength=256):
         ("k", 32, True)  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_onetimeauth_verify(max_messagelength=256):
@@ -184,6 +190,7 @@ def tweetnacl_crypto_onetimeauth_verify(max_messagelength=256):
         ("k", 32, True)  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_secretbox(max_messagelength=256):
@@ -200,6 +207,7 @@ def tweetnacl_crypto_secretbox(max_messagelength=256):
         ("k", 32, True)  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_secretbox_open(max_messagelength=256):
@@ -216,6 +224,7 @@ def tweetnacl_crypto_secretbox_open(max_messagelength=256):
         ("k", 32, True)  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_box(max_messagelength=256):
@@ -233,6 +242,7 @@ def tweetnacl_crypto_box(max_messagelength=256):
         ("sk", 32, True)  # secret key, size crypto_box_SECRETKEYBYTES
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
 
 def tweetnacl_crypto_box_open(max_messagelength=256):
@@ -250,7 +260,15 @@ def tweetnacl_crypto_box_open(max_messagelength=256):
         ("sk", 32, True)  # secret key, size crypto_box_SECRETKEYBYTES
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_messagelength)
+    addDevURandom(state)
     return (proj, state)
+
+def addDevURandom(state):
+    # we don't need the data in /dev/urandom to be symbolic, any concrete data should do
+    devurandom = angr.SimFile("devurandom", writable=False, concrete=True, has_end=True,  # if /dev/urandom actually gets to the end of this string and returns EOF, we want to be notified and have things fail rather than have it just invisibly generate symbolic data
+        content="fdjkslaiuoewouriejaklhewf,masdnm,fuiorewewrhewjlfawjjkl!$RU(!KshjkLAFjfsdu*(SD(*(*(Asafdlksfjfsisefiklsdanm,fsdhjksfesijlfjesfes,se,esf,jkflesejiolflajiewmn,.waehjkowaejhfofyoivnm,cxhvgudyviuovnxcvncvixocjvsidooiI*DVJSKLFE*#L@N#@$$*Dsjklfjksd8fds9#WU*#(R@$JMksldfjfsd89J*F(F#KLJRJ*(RW")
+    state.fs.insert('/dev/urandom', devurandom)
+    state.options.discard(angr.options.SHORT_READS)
 
 # Set up checking
 
