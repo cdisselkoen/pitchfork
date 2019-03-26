@@ -127,6 +127,24 @@ def tweetnacl_crypto_sign_keypair():
     addDevURandom(state)
     return (proj, state)
 
+def tweetnacl_crypto_hash(max_messagelength=256):
+    """
+    note that this function *does not handle any secret inputs* so it probably isn't necessary
+        to analyze. Still included for completeness, and because it is a building block of
+        some of the other functions that might be useful to test alone.
+    max_messagelength: maximum length of the message, in bytes.
+        i.e., the symbolic execution will not consider messages longer than max_messagelength
+    """
+    proj = tweetnaclProject()
+    state = funcEntryState(proj, "crypto_hash_sha512_tweet", [
+        ("h", 64, False),  # Output parameter: where to put the hash. 64 bytes.
+        ("m", None, False),  # message: length 'mlen'
+        ("mlen", None, False)  # message length: length of m. Not a pointer.
+    ])
+    state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
+    addDevURandom(state)
+    return (proj, state)
+
 def tweetnacl_crypto_stream_salsa20(max_outputbytes=128):
     """
     crypto_stream_salsa20 produces a continuous stream of output.
