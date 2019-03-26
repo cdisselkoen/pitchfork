@@ -368,6 +368,26 @@ def runTweetNaclCryptoSignKeypair(spec=True, window=None):
     armSpectreExplicitChecks(proj,state)
     return runState(proj, state, spec=spec, window=window)
 
+def runTweetNaclCryptoSignOpen(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_sign_open {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_sign_open()
+    armSpectreExplicitChecks(proj,state)
+    return runState(proj, state, spec=spec, window=window)
+
+def runTweetNaclCryptoHash(spec=True, window=None):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    """
+    l.info("Running TweetNaCl crypto_hash {} speculative execution".format("with" if spec else "without"))
+    proj,state = tweetnacl_crypto_hash()
+    armSpectreExplicitChecks(proj,state)
+    return runState(proj, state, spec=spec, window=window)
+
 def runTweetNaclCryptoStreamSalsa20(spec=True, window=None):
     """
     spec: whether to enable speculative execution
