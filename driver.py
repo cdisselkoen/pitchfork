@@ -381,6 +381,11 @@ def describeActiveStates(simgr):
             logstring += "; 1 state finished"
         else:
             logstring += "; {} states finished".format(len(simgr.deadended))
+    if 'spectre_violation' in simgr.stashes and len(simgr.spectre_violation) > 0:
+        if len(simgr.spectre_violation) == 1:
+            logstring += "; 1 Spectre violation"
+        else:
+            logstring += "; {} Spectre violations".format(len(simgr.spectre_violation))
     l.info(logstring)
     return simgr
 
