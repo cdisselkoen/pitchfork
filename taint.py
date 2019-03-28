@@ -24,7 +24,7 @@ def taintedUnconstrainedBits(state, name, bits):
     name: a name for the BVS
     bits: how many bits long
     """
-    return state.solver.Unconstrained(name, bits, key=("OOB_"+name,), eternal=False, annotations=(TaintedAnnotation(),))
+    return state.solver.Unconstrained(name, bits, key=("tainted_"+name,), eternal=False, annotations=(TaintedAnnotation(),))
 
 def is_tainted(state, ast):
     #l.debug("checking if {} (with annotations {} and leaves {}) is tainted".format(ast, ast.annotations, list(state.solver.leaves(ast))))
