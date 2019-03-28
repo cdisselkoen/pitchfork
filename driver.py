@@ -1,6 +1,7 @@
 from specvex import SimEngineSpecVEX, SpecState
 from oob import OOBState, OOBViolationFilter
 from spectre import SpectreOOBState, SpectreExplicitState, SpectreViolationFilter
+from taint import taintedUnconstrainedBits
 from utils import *  #pylint:disable=unused-wildcard-import
 
 import angr
@@ -82,7 +83,9 @@ def blatantOOB():
     return (proj, state)
 
 def tweetnaclProject():
-    return angr.Project('tweetnacl/testbinaryO3')
+    proj = angr.Project('tweetnacl/testbinaryO3')
+    makeRandomBytesSecret(proj)
+    return proj
 
 def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     """
@@ -126,17 +129,13 @@ def tweetnacl_crypto_sign_open(max_messagelength=256, with_hash_stub=True):
     addDevURandom(state)
     return (proj, state)
 
-def tweetnacl_crypto_sign_keypair(with_hash_stub=True, with_randombytes_stub=True):
+def tweetnacl_crypto_sign_keypair(with_hash_stub=True):
     """
     with_hash_stub: if True, then use a stub for the SHA512 hash function rather than
         trying to analyze it directly
-    with_randombytes_stub: if True, then use a stub for the randombytes() function
-        rather than trying to analyze it directly. The stub just generates a particular
-        constant value rather than random
     """
     proj = tweetnaclProject()
     if with_hash_stub: addHashblocksStub(proj)
-    if with_randombytes_stub: addRandomBytesStub(proj)
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_keypair",
         [("pk", 32, False), ("sk", 64, True)])
     addDevURandom(state)
@@ -322,15 +321,18 @@ def addHashblocksStub(proj):
     proj.hook_symbol("crypto_hashblocks_sha512_tweet", HashStub())
 
 class RandomBytesStub(angr.SimProcedure):
+    """
+    Generate unconstrained symbolic secret bytes as output
+    """
     def run(self, buf, size_sao):
-        l.info("stubbing out a call to randombytes")
+        l.info("supplying secret randombytes")
         size = self.state.solver.eval_one(size_sao, default=None)
         if size is None:
             raise angr.AngrError("generating a symbolic number of random bytes")
         for i in range(size):
-            self.state.mem[buf+i].uint8_t = 0x7a  # hopefully just filling with 0x7a is equivalent to random for our purposes
+            self.state.mem[buf+i].uint8_t = taintedUnconstrainedBits(self.state, "randombits", 8)
 
-def addRandomBytesStub(proj):
+def makeRandomBytesSecret(proj):
     proj.hook_symbol("randombytes", RandomBytesStub())
 
 # Set up checking
