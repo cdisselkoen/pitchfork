@@ -1,7 +1,10 @@
 # How to Run
 
 - Install [angr](https://github.com/angr/angr) using the directions [here](https://docs.angr.io/introductory-errata/install)
-    - NOTE: currently only tested with angr 8.19.2.4
+    - NOTE: currently only works with the most recent angr (specifically tested with Git commit
+        `97fd492f`). Will not work with angr 8.19.2.4, the latest version in Pip as of this writing.
+        (Commit `6f16f1e` in this repo, or older, work with angr 8.19.2.4, but do not contain any
+        more recent improvements.)
     - It is highly recommended to use the [pypy](https://pypy.org) JITting Python interpreter
         rather than the standard Python interpreter. E.g., on Mac:
         ```bash

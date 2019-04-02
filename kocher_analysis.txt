@@ -12,7 +12,15 @@
     that is, even obeying the bounds check, because the attacker controls the
     bounds check.
 10: we pass
-11: we pass
+11gcc: unlike the '11ker' and '11sub' variants, the '11gcc' variant of
+    'mymemcmp' includes a branch on values in the arrays, one of which is
+    uninitialized in this test case (even without speculative execution).
+    So, even without speculative execution, we branch on 'secret' data
+    (specifically, the contents of `array2`). Arguably we should consider the
+    contents of `array2` to be public for this test, in which case we will pass
+    this test case
+11ker: we pass
+11sub: we pass
 12: we pass
 13: we pass
 14: Like 04, this really does leak secret information (off the end of array1)

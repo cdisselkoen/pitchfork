@@ -1,7 +1,7 @@
 import angr
 import pyvex
 import claripy
-from angr.errors import SimReliftException
+from angr.errors import SimReliftException, UnsupportedIRStmtError
 from angr.state_plugins.inspect import BP_AFTER, BP_BEFORE
 from angr.engines import vex
 
@@ -57,13 +57,22 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             state._inspect('instruction', BP_BEFORE, instruction=ins_addr)
 
         # process it!
-        s_stmt = vex.statements.translate_stmt(stmt, state)
-        if s_stmt is not None:
-            state.history.extend_actions(s_stmt.actions)
+        try:
+            stmt_handler = self.stmt_handlers[stmt.tag_int]
+        except IndexError:
+            l.error("Unsupported statement type %s", (type(stmt)))
+            if angr.options.BYPASS_UNSUPPORTED_IRSTMT not in state.options:
+                raise UnsupportedIRStmtError("Unsupported statement type %s" % (type(stmt)))
+            state.history.add_event('resilience', resilience_type='irstmt', stmt=type(stmt).__name__, message='unsupported IRStmt')
+            return None
+        else:
+            exit_data = stmt_handler(self, state, stmt)
 
         # handling conditional exits is where the magic happens
-        if type(stmt) == pyvex.IRStmt.Exit:
-            l.debug("time {}: forking for conditional exit to {} under guard {}".format(state.spec.ins_executed, s_stmt.target, s_stmt.guard))
+        if exit_data is not None:
+            target, guard, jumpkind = exit_data
+
+            l.debug("time {}: forking for conditional exit to {} under guard {}".format(state.spec.ins_executed, target, guard))
 
             # Unlike normal SimEngineVEX, we always proceed down both sides of the branch
             # (to simulate possible wrong-path execution, i.e. branch misprediction)
@@ -72,17 +81,17 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             exit_state = state.copy()
             cont_state = state
 
-            branchcond = s_stmt.guard
+            branchcond = guard
             notbranchcond = claripy.Not(branchcond)
             if not state.solver.is_true(branchcond): exit_state.spec.append(branchcond)  # don't bother adding a deferred 'True' constraint
             if not state.solver.is_true(notbranchcond): cont_state.spec.append(notbranchcond)  # don't bother adding a deferred 'True' constraint
 
-            successors.add_successor(exit_state, s_stmt.target, s_stmt.guard, s_stmt.jumpkind, add_guard=False,
+            successors.add_successor(exit_state, target, guard, jumpkind, add_guard=False,
                                     exit_stmt_idx=state.scratch.stmt_idx, exit_ins_addr=state.scratch.ins_addr)
 
             # We don't add the guard for the exit_state (add_guard=False).
             # Unfortunately, the call to add the 'default' successor at the end of an irsb
-            # (line 311 in vex/engine.py as of this writing) leaves add_guard as default (True).
+            # (line 313 in vex/engine.py as of this writing) leaves add_guard as default (True).
             # For the moment, rather than patching this, we just don't record the guard at
             # all on the cont_state.
             # TODO not sure if this will mess us up. Is scratch.guard used for merging?
