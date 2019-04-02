@@ -361,12 +361,12 @@ def makeSpeculative(proj, state, window=250):
     """
     window: size of speculative window (~ROB) in x86 instructions.
     """
-    proj.engines.register_plugin('specvex', SimEngineSpecVEX(window))
+    proj.engines.register_plugin('specvex', SimEngineSpecVEX())
     proj.engines.order = ['specvex' if x=='vex' else x for x in proj.engines.order]  # replace 'vex' with 'specvex'
     if proj.engines.has_plugin('vex'): proj.engines.release_plugin('vex')
 
     #state.options.discard(angr.options.LAZY_SOLVES)  # turns out LAZY_SOLVES is not on by default
-    state.register_plugin('spec', SpecState())
+    state.register_plugin('spec', SpecState(window))
     assert state.spec.ins_executed == 0
 
 def getSimgr(proj, state, spec=True, window=None):

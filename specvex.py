@@ -16,10 +16,6 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
     Based on the default SimEngineVEX.
     """
 
-    def __init__(self, spec_window_size, **kwargs):
-        super().__init__(**kwargs)
-        self._spec_window_size = spec_window_size
-
     def _handle_statement(self, state, successors, stmt):
         """
         An override of the _handle_statement method in SimEngineVEX base class.
@@ -38,22 +34,6 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
             #l.debug("IMark: %#x", stmt.addr)
             state.scratch.num_insns += 1
-
-            # Keep track of how many instructions we have executed
-            state.spec.tick()
-
-            # See if it is time to retire the oldest conditional, that is, end possible wrong-path execution
-            age = state.spec.ageOfOldestConditional()
-            while age and age > self._spec_window_size:
-                cond = state.spec.popOldestConditional()
-                l.debug("time {}: adding deferred conditional (age {}): {}".format(state.spec.ins_executed, age, cond))
-                state.add_constraints(cond)
-                # See if the newly added constraint makes us unsat, if so, kill this state
-                if angr.sim_options.LAZY_SOLVES not in state.options and not state.solver.satisfiable():
-                    l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
-                    return False
-                age = state.spec.ageOfOldestConditional()  # check next conditional
-
             state._inspect('instruction', BP_BEFORE, instruction=ins_addr)
 
         # process it!
@@ -101,30 +81,22 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
         return True
 
-    #
-    # Pickling
-    #
-
-    def __setstate__(self, state):
-        self._spec_window_size = state['_spec_window_size']
-        super().__setstate__(state)
-
-    def __getstate__(self):
-        s = super().__getstate__()
-        s['_spec_window_size'] = self._spec_window_size
-
 class SpecState(angr.SimStatePlugin):
-    def __init__(self, ins=0, conds=None):
+    def __init__(self, spec_window_size, ins=0, conds=None):
         super().__init__()
+        self._spec_window_size = spec_window_size
         self.ins_executed = ins
         if conds is not None:
           self.conditionals = conds
         else:
           self.conditionals = collections.deque()
 
+    def arm(self, state):
+        state.inspect.b('instruction', when=BP_BEFORE, action=tickSpecState)
+
     @angr.SimStatePlugin.memo
     def copy(self, memo):
-        return SpecState(self.ins_executed, self.conditionals.copy())
+        return SpecState(self._spec_window_size, self.ins_executed, self.conditionals.copy())
 
     def tick(self):
         # we count instructions executed here because I couldn't find an existing place (e.g. state.history) where instructions are counted.
@@ -145,3 +117,19 @@ class SpecState(angr.SimStatePlugin):
     def popOldestConditional(self):
         (cond, _) = self.conditionals.popleft()
         return cond
+
+def tickSpecState(state):
+    # Keep track of how many instructions we have executed
+    state.spec.tick()
+
+    # See if it is time to retire the oldest conditional, that is, end possible wrong-path execution
+    age = state.spec.ageOfOldestConditional()
+    while age and age > state.spec._spec_window_size:
+        cond = state.spec.popOldestConditional()
+        l.debug("time {}: adding deferred conditional (age {}): {}".format(state.spec.ins_executed, age, cond))
+        state.add_constraints(cond)
+        # See if the newly added constraint makes us unsat, if so, kill this state
+        if angr.sim_options.LAZY_SOLVES not in state.options and not state.solver.satisfiable():
+            l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
+            return False
+        age = state.spec.ageOfOldestConditional()  # check next conditional
