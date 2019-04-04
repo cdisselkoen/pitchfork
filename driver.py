@@ -49,11 +49,6 @@ def getArgBVS(state, argname):
 
 # Loading various binaries for testing
 
-def fauxware():
-    proj = angr.Project('../angr-binaries/tests/x86_64/fauxware')
-    state = proj.factory.entry_state()
-    return (proj, state)
-
 def kocher(s):
     """
     Pass a string like "01" or "12" to get an angr project and state for that
