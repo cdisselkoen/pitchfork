@@ -7,10 +7,10 @@ from sys import stdout
 def isAst(x):
     return isinstance(x, claripy.ast.Base)
 
-def describeAst(state, ast, checkTaint=True):
+def describeAst(ast, checkTaint=True):
     return hex(ast) if not isAst(ast) \
             else "{}".format(ast) if not checkTaint \
-            else "{} (TAINTED)".format(ast) if is_tainted(state, ast) \
+            else "{} (TAINTED)".format(ast) if is_tainted(ast) \
             else "{} (untainted, but with annotations {})".format(ast, ast.annotations) if hasattr(ast, 'annotations') and ast.annotations \
             else "{} (untainted)".format(ast)
 

@@ -92,8 +92,8 @@ def concretization_succeeded(state):
 
 # Call during a breakpoint callback on 'address_concretization'
 def log_concretization(state):
-    raw = describeAst(state, state.inspect.address_concretization_expr)
-    concretized = "[{}]".format(', '.join(describeAst(state, x) for x in state.inspect.address_concretization_result))
+    raw = describeAst(state.inspect.address_concretization_expr)
+    concretized = "[{}]".format(', '.join(describeAst(x) for x in state.inspect.address_concretization_result))
     l.debug("instr {}: concretized {} to {}".format(hex(state.addr), raw, concretized))
 
 def detected_oob_read(state):

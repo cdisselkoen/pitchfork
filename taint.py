@@ -26,7 +26,7 @@ def taintedUnconstrainedBits(state, name, bits):
     """
     return state.solver.Unconstrained(name, bits, key=("tainted_"+name,), eternal=False, annotations=(TaintedAnnotation(),))
 
-def is_tainted(state, ast):
+def is_tainted(ast):
     return _is_immediately_tainted(ast) or any(_is_immediately_tainted(v) for v in ast.leaf_asts())
 
 def _is_immediately_tainted(ast):

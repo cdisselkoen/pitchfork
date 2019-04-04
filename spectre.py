@@ -138,47 +138,27 @@ def _tainted_read(state):
     addr = state.inspect.mem_read_address
     #expr = state.inspect.mem_read_expr
     #l.debug("read {} (with leaf_asts {}) from {} (with leaf_asts {})".format(
-        #describeAst(state,expr),
-        #list(describeAst(state,leaf) for leaf in expr.leaf_asts()),
-        #describeAst(state,addr),
-        #list(describeAst(state,leaf) for leaf in addr.leaf_asts())))
-    if is_tainted(state, addr):
-        if isinstance(state.spectre, SpectreExplicitState):
-            #return _can_point_to_secret(state, addr)
-            return True
-        elif isinstance(state.spectre, SpectreOOBState):
-            #return can_be_oob(state, addr, state.inspect.mem_read_length)
-            return True
-        else:
-            assert False == "_tainted_read: Unknown state.spectre plugin"
-    else:
-        return False
+        #describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        #describeAst(addr),
+        #list(describeAst(leaf) for leaf in addr.leaf_asts())))
+    return is_tainted(addr)
 
 # Call during a breakpoint callback on 'mem_write'
 def _tainted_write(state):
     addr = state.inspect.mem_write_address
     #expr = state.inspect.mem_write_expr
     #l.debug("wrote {} (with leaf_asts {}) to {} (with leaf_asts {})".format(
-        #describeAst(state,expr),
-        #list(describeAst(state,leaf) for leaf in expr.leaf_asts()),
-        #describeAst(state,addr),
-        #list(describeAst(state,leaf) for leaf in addr.leaf_asts())))
-    if is_tainted(state, addr):
-        if isinstance(state.spectre, SpectreExplicitState):
-            #return _can_point_to_secret(state, addr)
-            return True
-        elif isinstance(state.spectre, SpectreOOBState):
-            #return can_be_oob(state, addr, state.inspect.mem_write_length)
-            return True
-        else:
-            assert False == "_tainted_write: Unknown state.spectre plugin"
-    else:
-        return False
+        #describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        #describeAst(addr),
+        #list(describeAst(leaf) for leaf in addr.leaf_asts())))
+    return is_tainted(addr)
 
 # Call during a breakpoint callback on 'exit' (i.e. conditional branch)
 def _tainted_branch(state):
     guard = state.inspect.exit_guard
-    return is_tainted(state, guard) and \
+    return is_tainted(guard) and \
         state.solver.satisfiable(extra_constraints=[guard == True]) and \
         state.solver.satisfiable(extra_constraints=[guard == False])
 
@@ -192,8 +172,8 @@ def _can_point_to_secret(state, ast):
 def detected_spectre_read(state):
     print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Instruction Address {}\n  Read Address {}\n  Read Value {}\n  args were {}\n  constraints were {}\n".format(
         hex(state.addr),
-        describeAst(state, state.inspect.mem_read_address),
-        describeAst(state, state.inspect.mem_read_expr),
+        describeAst(state.inspect.mem_read_address),
+        describeAst(state.inspect.mem_read_expr),
         state.globals['args'],
         state.solver.constraints))
     state.spectre.violation = ('read', state.addr, state.inspect.mem_read_address, state.inspect.mem_read_expr)
@@ -201,8 +181,8 @@ def detected_spectre_read(state):
 def detected_spectre_write(state):
     print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Instruction Address {}\n  Write Address {}\n  Write Value {}\n  args were {}\n  constraints were {}\n".format(
         hex(state.addr),
-        describeAst(state, state.inspect.mem_write_address),
-        describeAst(state, state.inspect.mem_write_expr),
+        describeAst(state.inspect.mem_write_address),
+        describeAst(state.inspect.mem_write_expr),
         state.globals['args'],
         state.solver.constraints))
     state.spectre.violation = ('write', state.addr, state.inspect.mem_write_address, state.inspect.mem_write_expr)
@@ -211,7 +191,7 @@ def detected_spectre_branch(state):
     print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  args were {}\n  constraints were {}\n".format(
         hex(state.addr),
         state.inspect.exit_target,
-        describeAst(state, state.inspect.exit_guard),
+        describeAst(state.inspect.exit_guard),
         state.globals['args'],
         state.solver.constraints))
     state.spectre.violation = ('branch', state.addr, state.inspect.exit_target, state.inspect.exit_guard)
