@@ -2,6 +2,7 @@ from specvex import SimEngineSpecVEX, SpecState
 from oob import OOBState, OOBViolationFilter
 from spectre import SpectreOOBState, SpectreExplicitState, SpectreViolationFilter
 from taint import taintedUnconstrainedBits
+from irop_hook import IROpHook
 from utils import *  #pylint:disable=unused-wildcard-import
 
 import angr
@@ -17,6 +18,7 @@ import time
 #logging.getLogger('specvex').setLevel(logging.DEBUG)
 logging.getLogger('spectre').setLevel(logging.INFO)
 logging.getLogger('oob').setLevel(logging.DEBUG)
+#logging.getLogger('irop_hook').setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.INFO)
 
 def funcEntryState(proj, funcname, args):
@@ -39,6 +41,7 @@ def funcEntryState(proj, funcname, args):
     argBVSs = list(claripy.BVS(name, 64) for name in argnames)
     state = proj.factory.call_state(funcaddr, *argBVSs)
     state.globals['args'] = {argname:(argBVS, length, secret) for (argname, (_, length, secret), argBVS) in zip(argnames, args, argBVSs)}
+    state.register_plugin('irop_hook', IROpHook())
     return state
 
 def getArgBVS(state, argname):
