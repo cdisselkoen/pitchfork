@@ -1,6 +1,5 @@
 import angr
 import claripy
-import pyvex
 
 from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
 from taint import taintedUnconstrainedBits, is_tainted
@@ -137,8 +136,12 @@ class SpectreExplicitState(angr.SimStatePlugin):
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
     addr = state.inspect.mem_read_address
-    expr = state.inspect.mem_read_expr
-    #l.debug("read {} from {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
+    #expr = state.inspect.mem_read_expr
+    #l.debug("read {} (with leaf_asts {}) from {} (with leaf_asts {})".format(
+        #describeAst(state,expr),
+        #list(describeAst(state,leaf) for leaf in expr.leaf_asts()),
+        #describeAst(state,addr),
+        #list(describeAst(state,leaf) for leaf in addr.leaf_asts())))
     if is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)
@@ -154,8 +157,12 @@ def _tainted_read(state):
 # Call during a breakpoint callback on 'mem_write'
 def _tainted_write(state):
     addr = state.inspect.mem_write_address
-    expr = state.inspect.mem_write_expr
-    #l.debug("wrote {} to {} {}".format(describeAst(state,expr), describeAst(state,addr), "which could resolve to a secret address" if _can_point_to_secret(state,addr) else ""))
+    #expr = state.inspect.mem_write_expr
+    #l.debug("wrote {} (with leaf_asts {}) to {} (with leaf_asts {})".format(
+        #describeAst(state,expr),
+        #list(describeAst(state,leaf) for leaf in expr.leaf_asts()),
+        #describeAst(state,addr),
+        #list(describeAst(state,leaf) for leaf in addr.leaf_asts())))
     if is_tainted(state, addr):
         if isinstance(state.spectre, SpectreExplicitState):
             #return _can_point_to_secret(state, addr)

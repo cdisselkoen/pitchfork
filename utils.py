@@ -11,8 +11,9 @@ def describeAst(state, ast, checkTaint=True):
     return hex(ast) if not isAst(ast) \
             else "{}".format(ast) if not checkTaint \
             else "{} (TAINTED)".format(ast) if is_tainted(state, ast) \
-            else "{} (untainted, but with annotations {})".format(ast, ast.annotations) if ast.annotations \
+            else "{} (untainted, but with annotations {})".format(ast, ast.annotations) if hasattr(ast, 'annotations') and ast.annotations \
             else "{} (untainted)".format(ast)
+
 
 def showbbASM(proj, bbaddr, file=stdout):
     """
