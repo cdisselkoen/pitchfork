@@ -365,6 +365,7 @@ def makeSpeculative(proj, state, window=250):
 
     #state.options.discard(angr.options.LAZY_SOLVES)  # turns out LAZY_SOLVES is not on by default
     state.register_plugin('spec', SpecState(window))
+    state.spec.arm(state)
     assert state.spec.ins_executed == 0
 
 def getSimgr(proj, state, spec=True, window=None):
