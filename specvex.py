@@ -36,6 +36,9 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             state.scratch.num_insns += 1
             state._inspect('instruction', BP_BEFORE, instruction=ins_addr)
 
+            if state.spec.mispredicted:
+                return False  # report path as deadended
+
         # process it!
         try:
             stmt_handler = self.stmt_handlers[stmt.tag_int]
@@ -90,6 +93,7 @@ class SpecState(angr.SimStatePlugin):
           self.conditionals = conds
         else:
           self.conditionals = collections.deque()
+        self.mispredicted = False
 
     def arm(self, state):
         state.inspect.b('instruction', when=BP_BEFORE, action=tickSpecState)
@@ -131,5 +135,5 @@ def tickSpecState(state):
         # See if the newly added constraint makes us unsat, if so, kill this state
         if angr.sim_options.LAZY_SOLVES not in state.options and not state.solver.satisfiable():
             l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
-            return False
+            state.spec.mispredicted = True
         age = state.spec.ageOfOldestConditional()  # check next conditional
