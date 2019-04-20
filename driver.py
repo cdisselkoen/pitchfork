@@ -392,7 +392,8 @@ def runSimgr(simgr):
 def describeActiveStates(simgr):
     if len(simgr.active) == 0: logstring = "no active states"
     elif len(simgr.active) == 1: logstring = "1 active state, at {}".format(hex(simgr.active[0].addr))
-    else: logstring = "{} active states, at {}".format(len(simgr.active), list(hex(s.addr) for s in simgr.active))
+    elif len(simgr.active) <= 8: logstring = "{} active states, at {}".format(len(simgr.active), list(hex(s.addr) for s in simgr.active))
+    else: logstring = "{} active states, at {} unique addresses".format(len(simgr.active), len(set(s.addr for s in simgr.active)))
     if 'deadended' in simgr.stashes and len(simgr.deadended) > 0:
         if len(simgr.deadended) == 1:
             logstring += "; 1 state finished"
@@ -403,6 +404,7 @@ def describeActiveStates(simgr):
             logstring += "; 1 Spectre violation"
         else:
             logstring += "; {} Spectre violations".format(len(simgr.spectre_violation))
+    logstring += ". Max bbs is {}, max #constraints is {}".format(max(len(s.history.bbl_addrs) for s in simgr.active), max(len(s.solver.constraints) for s in simgr.active))
     l.info(logstring)
     return simgr
 
