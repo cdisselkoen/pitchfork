@@ -57,3 +57,21 @@ def dumpHistories(proj, states, asm=True):
     for (i,state) in enumerate(states):
         with open('history'+str(i)+'.txt', 'w') as f:
             showBBHistory(proj, state, asm=asm, file=f)
+
+def stepTogether(simgrA, simgrB):
+    """
+    Shortcut to step a pair of simgrs together.
+    Intended for interactive mode, comparing two configurations.
+    """
+    simgrA.step()
+    simgrB.step()
+    print("A: {}".format(simgrA.active))
+    print("B: {}".format(simgrB.active))
+
+def stashTogether(simgrA, simgrB, addr):
+    """
+    Stash all states at the given addr in both simgrs.
+    Intended for use with stepTogether.
+    """
+    simgrA.stash(filter_func=lambda s: s.addr==addr)
+    simgrB.stash(filter_func=lambda s: s.addr==addr)
