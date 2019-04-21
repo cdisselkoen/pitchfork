@@ -1,10 +1,9 @@
 # How to Run
 
 - Install [angr](https://github.com/angr/angr) using the directions [here](https://docs.angr.io/introductory-errata/install)
-    - NOTE: currently only works with [our fork of angr](https://github.com/cdisselkoen/angr) on its `irop-hooks` branch.
-        Will not work with angr 8.19.2.4, the latest version in Pip as of this writing.
-        (Commit `6f16f1e` in this repo, or older, work with angr 8.19.2.4, but do not contain any
-        more recent improvements.)
+    - NOTE: currently only works with angr version 8.19.4.5 (latest in Pip as of this writing).
+        - Actually, currently requires a small patch against angr; the patched version is available
+        at [our fork of angr](https://github.com/cdisselkoen/angr) on its `irop-hooks` branch.
     - It is highly recommended to use the [pypy](https://pypy.org) JITting Python interpreter
         rather than the standard Python interpreter. E.g., on Mac:
         ```bash
