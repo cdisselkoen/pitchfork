@@ -404,7 +404,7 @@ def describeActiveStates(simgr):
             logstring += "; 1 Spectre violation"
         else:
             logstring += "; {} Spectre violations".format(len(simgr.spectre_violation))
-    logstring += ". Max bbs is {}, max #constraints is {}".format(max(len(s.history.bbl_addrs) for s in simgr.active), max(len(s.solver.constraints) for s in simgr.active))
+    if len(simgr.active) > 0: logstring += ". Max bbs is {}, max #constraints is {}".format(max(len(s.history.bbl_addrs) for s in simgr.active), max(len(s.solver.constraints) for s in simgr.active))
     l.info(logstring)
     return simgr
 
