@@ -383,9 +383,9 @@ def getSimgr(proj, state, spec=True, window=None):
         simgr.use_technique(SpectreViolationFilter())
     return simgr
 
-def runSimgr(simgr):
+def runSimgr(simgr, **kwargs):
     start = time.process_time()
-    simgr.run(step_func=describeActiveStates)
+    simgr.run(step_func=describeActiveStates, **kwargs)
     print("running time: {}".format(time.process_time() - start))
     return simgr
 
