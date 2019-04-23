@@ -85,6 +85,9 @@ def tweetnaclProject():
     makeRandomBytesSecret(proj)
     return proj
 
+def donnaProject():
+    return angr.Project('x25519bench/test')
+
 def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     """
     max_messagelength: maximum length of the message, in bytes.
@@ -296,6 +299,24 @@ def tweetnacl_crypto_box_open(max_messagelength=256):
     addDevURandom(state)
     return (proj, state)
 
+def donna_no_lfence():
+    proj = donnaProject()
+    state = funcEntryState(proj, "crypto_scalarmult", [
+        ("mypublic", 32, False),
+        ("secret", 32, True),
+        ("basepoint", 32, False)
+    ])
+    addDevURandom(state)
+    return (proj, state)
+
+def donna_lfence():
+    proj = donnaProject()
+    state = funcEntryState(proj, "crypto_scalarmult_lfence", [
+        ("mypublic", 32, False),
+        ("secret", 32, True),
+        ("basepoint", 32, False)
+    ])
+
 # Useful approximations to make analysis more tractable
 
 def addDevURandom(state):
@@ -485,6 +506,19 @@ def kocher11Simgr(s, spec=True, window=None, run=True):
     l.info("Running Kocher test case 11{} {} speculative execution".format(s, "with" if spec else "without"))
     proj,state = kocher11(s)
     armSpectreOOBChecks(proj,state)
+    simgr = getSimgr(proj, state, spec=spec, window=window)
+    if run: return runSimgr(simgr)
+    else: return simgr
+
+def donnaSimgr(lfence=False, spec=True, window=None, run=True):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    run: if True, runs the simgr before returning it
+    """
+    l.info("Running Donna {} lfence and {} speculative execution".format("with" if lfence else "without", "with" if spec else "without"))
+    proj,state = donna_lfence() if lfence else donna_no_lfence()
+    armSpectreExplicitChecks(proj,state)
     simgr = getSimgr(proj, state, spec=spec, window=window)
     if run: return runSimgr(simgr)
     else: return simgr
