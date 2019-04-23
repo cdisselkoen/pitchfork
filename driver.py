@@ -316,6 +316,8 @@ def donna_lfence():
         ("secret", 32, True),
         ("basepoint", 32, False)
     ])
+    addDevURandom(state)
+    return (proj, state)
 
 # Useful approximations to make analysis more tractable
 
