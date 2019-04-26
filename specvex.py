@@ -97,6 +97,7 @@ class SpecState(angr.SimStatePlugin):
 
     def arm(self, state):
         state.inspect.b('instruction', when=BP_BEFORE, action=tickSpecState)
+        state.inspect.b('statement', when=BP_BEFORE, action=handleFences)
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
@@ -122,6 +123,14 @@ class SpecState(angr.SimStatePlugin):
         (cond, _) = self.conditionals.popleft()
         return cond
 
+    def popAllConditionals(self):
+        """
+        A generator that pops each conditional and yields it
+        """
+        while self.conditionals:
+            (cond, _) = self.conditionals.popleft()
+            yield cond
+
 def tickSpecState(state):
     # Keep track of how many instructions we have executed
     state.spec.tick()
@@ -137,3 +146,16 @@ def tickSpecState(state):
             l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
             state.spec.mispredicted = True
         age = state.spec.ageOfOldestConditional()  # check next conditional
+
+def handleFences(state):
+    """
+    A hook watching for fence instructions, don't speculate past fences
+    """
+    stmt = state.scratch.irsb.statements[state.inspect.statement]
+    if type(stmt) == pyvex.stmt.MBE and stmt.event == "Imbe_Fence":
+        l.debug("time {}: encountered a fence, flushing all deferred constraints".format(state.spec.ins_executed))
+        state.add_constraints(*list(state.spec.popAllConditionals()))
+        # See if this has made us unsat, if so, kill this state
+        if angr.sim_options.LAZY_SOLVES not in state.options and not state.solver.satisfiable():
+            l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
+            state.spec.mispredicted = True
