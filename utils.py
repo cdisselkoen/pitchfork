@@ -58,6 +58,52 @@ def dumpHistories(proj, states, asm=True):
         with open('history'+str(i)+'.txt', 'w') as f:
             showBBHistory(proj, state, asm=asm, file=f)
 
+def verboseStep(proj, simgr, asm=True):
+    """
+    asm: If True then show blocks as x86 assembly instructions.
+        If False then show blocks as VEX IR instructions.
+        If None then don't show block contents, only block addresses.
+    """
+    if len(simgr.active) > 1:
+        print("Please stash all but one active state before using verboseStep")
+    else:
+        oldaddr = simgr.active[0].addr
+        simgr.step()
+        newaddr = simgr.active[0].addr
+        oldsymb = proj.loader.find_symbol(oldaddr, fuzzy=False)
+        if oldsymb:
+            print("Just executed (top of function {}):".format(oldsymb.name))
+        else:
+            oldsymb = proj.loader.find_symbol(oldaddr, fuzzy=True)
+            if oldsymb:
+                print("Just executed (in function {}):".format(oldsymb.name))
+            else:
+                print("Just executed (unknown function):")
+        if asm: showbbASM(proj, oldaddr)
+        elif asm is not None: showbbVEX(proj, oldaddr)
+        else: print("block {}".format(oldaddr))
+        print("===============")
+        newsymb = proj.loader.find_symbol(newaddr, fuzzy=False)
+        if newsymb:
+            print("About to execute (top of function {}):".format(newsymb.name))
+        else:
+            newsymb = proj.loader.find_symbol(newaddr, fuzzy=True)
+            if newsymb:
+                print("About to execute (in function {}):".format(newsymb.name))
+            else:
+                print("About to execute (unknown function):")
+        if asm: showbbASM(proj, newaddr)
+        elif asm is not None: showbbVEX(proj, newaddr)
+        else: print("block {}".format(newaddr))
+        print("\nCurrently at instruction {}".format(hex(newaddr)))
+
+def runUntilRetFrom(simgr, calladdr):
+    """
+    calladdr: address of the call instruction (NOT the address of the called function)
+        Assumes it's a callq or some other 5-byte instruction
+    """
+    simgr.run(until=lambda s: s.active[0].addr == calladdr+5)
+
 def stepTogether(simgrA, simgrB):
     """
     Shortcut to step a pair of simgrs together.
