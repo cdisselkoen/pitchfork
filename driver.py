@@ -88,6 +88,9 @@ def tweetnaclProject():
 def donnaProject():
     return angr.Project('x25519bench/test')
 
+def opensslProject():
+    return angr.Project('openssl/openssl')
+
 def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     """
     max_messagelength: maximum length of the message, in bytes.
@@ -319,6 +322,14 @@ def donna_lfence():
     addDevURandom(state)
     return (proj, state)
 
+def openssl_EVP_PKEY2PKCS8():
+    proj = opensslProject()
+    state = funcEntryState(proj, "EVP_PKEY2PKCS8", [
+        ("pkey", 80, True)  # private key. Actually a struct with size around 80 bytes, mostly pointers.  Possible that we actually care about the data those pointers point to, not the pointers themselves, not sure.
+    ])
+    addDevURandom(state)
+    return (proj, state)
+
 # Useful approximations to make analysis more tractable
 
 def addDevURandom(state):
@@ -520,6 +531,19 @@ def donnaSimgr(lfence=False, spec=True, window=None, run=True):
     """
     l.info("Running Donna {} lfence and {} speculative execution".format("with" if lfence else "without", "with" if spec else "without"))
     proj,state = donna_lfence() if lfence else donna_no_lfence()
+    armSpectreExplicitChecks(proj,state)
+    simgr = getSimgr(proj, state, spec=spec, window=window)
+    if run: return runSimgr(simgr)
+    else: return simgr
+
+def openssl_EVP_PKEY2PKCS8_simgr(spec=True, window=None, run=True):
+    """
+    spec: whether to enable speculative execution
+    window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    run: if True, runs the simgr before returning it
+    """
+    l.info("Running OpenSSL EVP_PKEY2PKCS8 {} speculative execution".format("with" if spec else "without"))
+    proj,state = openssl_EVP_PKEY2PKCS8()
     armSpectreExplicitChecks(proj,state)
     simgr = getSimgr(proj, state, spec=spec, window=window)
     if run: return runSimgr(simgr)
