@@ -320,19 +320,39 @@ def donna_lfence():
     addDevURandom(state)
     return (proj, state)
 
+def abstractEVP_PKEY():
+    """
+    Abstract representation of an EVP_PKEY aka struct evp_pkey_st
+    """
+    return struct([
+        publicValue(), publicValue(),  # type, save_type, and references (total 128 bits I guess?)
+        pointerToUnconstrainedPublic(cannotPointSecret=True),  # ameth
+        pointerToUnconstrainedPublic(),  # engine
+        pointerToUnconstrainedPublic(),  # pmeth_engine
+        pointerTo(secretArray(512), 512),  # pkey union. Conservatively estimated to definitely fit within 512 bytes
+        publicValue(),  # save_parameters
+        pointerToUnconstrainedPublic(),  # attributes
+        pointerToUnconstrainedPublic()   # lock
+    ])
+
 def openssl_EVP_PKEY2PKCS8():
     proj = opensslProject()
     state = funcEntryState(proj, "EVP_PKEY2PKCS8", [
-        ("pkey", pointerTo(struct([  # pointer to struct evp_pkey_st
-            publicValue(), publicValue(),  # type, save_type, and references (total 128 bits I guess?)
-            pointerToUnconstrainedPublic(cannotPointSecret=True),  # ameth
-            pointerToUnconstrainedPublic(),  # engine
-            pointerToUnconstrainedPublic(),  # pmeth_engine
-            pointerTo(secretArray(512), 512),  # pkey union. Conservatively estimated to definitely fit within 512 bytes
-            publicValue(),  # save_parameters
-            pointerToUnconstrainedPublic(),  # attributes
-            pointerToUnconstrainedPublic()   # lock
-        ]), 128, cannotPointSecret=True))
+        ("pkey", pointerTo(abstractEVP_PKEY(), 128, cannotPointSecret=True))
+    ])
+    addDevURandom(state)
+    return (proj, state)
+
+def openssl_ASN1_item_sign():
+    proj = opensslProject()
+    state = funcEntryState(proj, "ASN1_item_sign", [
+        ("it", pointerToUnconstrainedPublic()),
+        ("algor1", pointerToUnconstrainedPublic()),
+        ("algor2", pointerToUnconstrainedPublic()),
+        ("signature", pointerToUnconstrainedPublic()),
+        ("asn", pointerToUnconstrainedPublic()),
+        ("pkey", pointerTo(abstractEVP_PKEY(), 128, cannotPointSecret=True)),
+        ("type", pointerToUnconstrainedPublic())
     ])
     addDevURandom(state)
     return (proj, state)
@@ -541,18 +561,28 @@ def donnaSimgr(lfence=False, spec=True, window=None, run=True):
     if run: return runSimgr(simgr)
     else: return simgr
 
-def openssl_EVP_PKEY2PKCS8_simgr(spec=True, window=None, run=True):
+def _opensslSimgr(getProjState, funcname, spec=True, window=None, run=True):
     """
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
     run: if True, runs the simgr before returning it
     """
-    l.info("Running OpenSSL EVP_PKEY2PKCS8 {} speculative execution".format("with" if spec else "without"))
-    proj,state = openssl_EVP_PKEY2PKCS8()
+    l.info("Running OpenSSL {} {} speculative execution".format(funcname, "with" if spec else "without"))
+    proj,state = getProjState()
     armSpectreExplicitChecks(proj,state)
     simgr = getSimgr(proj, state, spec=spec, window=window)
     if run: return runSimgr(simgr)
     else: return simgr
+
+"""
+For docs on the arguments to all of the below OpenSSL functions see docs on _opensslSimgr()
+"""
+
+def openssl_EVP_PKEY2PKCS8_simgr(spec=True, window=None, run=True):
+    return _opensslSimgr(openssl_EVP_PKEY2PKCS8, "EVP_PKEY2PKCS8", spec=spec, window=window, run=run)
+
+def openssl_ASN1_item_sign_simgr(spec=True, window=None, run=True):
+    return _opensslSimgr(openssl_ASN1_item_sign, "ASN1_item_sign", spec=spec, window=window, run=run)
 
 def runallTweetNacl(spec=True, window=None):
     return { "crypto_sign":cryptoSignSimgr(spec=spec, window=window),
