@@ -324,17 +324,15 @@ def openssl_EVP_PKEY2PKCS8():
     proj = opensslProject()
     state = funcEntryState(proj, "EVP_PKEY2PKCS8", [
         ("pkey", pointerTo(struct([  # pointer to struct evp_pkey_st
-            publicValue(),  # type
-            publicValue(),  # save_type
-            publicValue(),  # references
-            pointerToUnconstrainedPublic(),  # ameth
+            publicValue(), publicValue(),  # type, save_type, and references (total 128 bits I guess?)
+            pointerToUnconstrainedPublic(cannotPointSecret=True),  # ameth
             pointerToUnconstrainedPublic(),  # engine
             pointerToUnconstrainedPublic(),  # pmeth_engine
             pointerTo(secretArray(512), 512),  # pkey union. Conservatively estimated to definitely fit within 512 bytes
             publicValue(),  # save_parameters
             pointerToUnconstrainedPublic(),  # attributes
             pointerToUnconstrainedPublic()   # lock
-        ]), 128))
+        ]), 128, cannotPointSecret=True))
     ])
     addDevURandom(state)
     return (proj, state)

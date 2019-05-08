@@ -4,7 +4,7 @@ import claripy
 from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
 from taint import taintedUnconstrainedBits, is_tainted
 from utils import isAst, describeAst
-from abstractdata import AbstractValue, AbstractPointer
+from abstractdata import AbstractValue, AbstractPointer, AbstractPointerToUnconstrainedPublic
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -118,17 +118,31 @@ class SpectreExplicitState(angr.SimStatePlugin):
         secretStart = 0x1100000  # a should-be-unused part of the virtual memory space, after where CLE puts its 'externs' object
         secretMustEnd = 0x2000000  # secrets must be stored somewhere in [secretStart, secretMustEnd)
 
+        notSecretAddresses = []  # see notes in MemoryLayout.__init__
         for (var, val) in self.vars:
             assert isAst(var)
             assert isinstance(val, AbstractValue)
             if val.secret:
                 raise ValueError("not implemented yet: secret arguments passed by value")
             elif isinstance(val, AbstractPointer):
+                if val.cannotPointSecret: notSecretAddresses.append(var)
                 (mlayout, newStart) = memLayoutForPointee(var, val.pointee, secretStart, secretMustEnd)
                 secretStart = newStart  # update to account for what was used in the call to memLayoutForPointee
                 self.secretIntervals.extend(mlayout.secretIntervals)
+                notSecretAddresses.extend(mlayout.notSecretAddresses)
                 for (a, v) in mlayout.concreteAssignments.items():
+                    #print("Assigning address {} to value {}".format(describeAst(a), describeAst(v)))
                     state.mem[a].uint64_t = v
+            elif isinstance(val, AbstractPointerToUnconstrainedPublic):
+                if val.cannotPointSecret: notSecretAddresses.append(var)
+            #print("Secret intervals:")
+            #for (mn, mx) in self.secretIntervals:
+                #print("[{}, {})".format(describeAst(mn), describeAst(mx)))
+            #print("Not-secret addresses:")
+            #for addr in notSecretAddresses:
+                #print(describeAst(addr))
+
+        self.secretIntervals = normalizeIntervals(self.secretIntervals)
 
         for (mn,mx) in self.secretIntervals:
             if isAst(mn):
@@ -151,9 +165,12 @@ class SpectreExplicitState(angr.SimStatePlugin):
             for i in range(mn_as_int,mx_as_int):
                 state.mem[i].uint8_t = oob_memory_fill("secret", 8, state)
 
+        for addr in notSecretAddresses:
+            state.solver.add(claripy.And(*[claripy.Or(addr < mn, addr >= mx) for (mn,mx) in self.secretIntervals]))
+
         state.memory.read_strategies.insert(0, TargetedStrategy(self.secretIntervals))
         state.memory.write_strategies.insert(0, TargetedStrategy(self.secretIntervals))
-        #state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
+        state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
 
         self._armed = True
 
@@ -171,6 +188,7 @@ class MemoryLayout:
     def __init__(self):
         self.secretIntervals = []  # Intervals [min, max) describing secret memory locations. min is inclusive, max exclusive. Can be concrete or symbolic.
         self.concreteAssignments = {}  # Keys are concrete addresses, values are the 64-bit values (concrete or symbolic) that should be stored there
+        self.notSecretAddresses = []  # Addresses (probably symbolic) which we assert _cannot_ point (directly) to any secret data, even by aliasing with a pointer to secret data
 
     def addSecretInterval(self, mn, mx):
         """
@@ -184,12 +202,31 @@ class MemoryLayout:
         """
         self.concreteAssignments[addr] = val
 
+    def addNotSecretAddress(self, addr):
+        self.notSecretAddresses.append(addr)
+
     def mergeWith(self, otherMemoryLayout):
         """
         Incorporate all the information from otherMemoryLayout into this one
         """
         self.secretIntervals.extend(otherMemoryLayout.secretIntervals)
         self.concreteAssignments.update(otherMemoryLayout.concreteAssignments)
+        self.notSecretAddresses.extend(otherMemoryLayout.notSecretAddresses)
+
+    def display(self):
+        """
+        Return a string describing the MemoryLayout in detail
+        """
+        r = "\nSecret intervals:"
+        for (mn, mx) in self.secretIntervals:
+            r += "\n[{}, {})".format(describeAst(mn), describeAst(mx))
+        r += "\nAssignments:"
+        for (a, v) in self.concreteAssignments.items():
+            r += "\nAddress {} gets value {}".format(describeAst(a), describeAst(v))
+        r += "\nNot-secret addresses:"
+        for addr in self.notSecretAddresses:
+            r += "\n{}".format(describeAst(addr))
+        return r
 
 def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
     """
@@ -206,7 +243,6 @@ def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
         assert all(isinstance(v, AbstractValue) for v in pointee)
         if all(v.secret for v in pointee):
             mlayout.addSecretInterval(var, var+8*len(pointee))  # everything in that interval is secret
-            return (mlayout, scratchStart)
         else:
             for (i, v) in enumerate(pointee):
                 elementaddr = var+i*8
@@ -217,14 +253,44 @@ def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
                     vaddr = scratchStart  # we decide that v's value is this
                     mlayout.assign(elementaddr, vaddr)  # at elementaddr, we have the value (that is, pointer/address) vaddr
                     scratchStart += v.maxPointeeSize  # reserve this scratch for the data v points to
+                    if v.cannotPointSecret: mlayout.addNotSecretAddress(vaddr)
                     (pointeeLayout, newScratchStart) = memLayoutForPointee(vaddr, v.pointee, scratchStart, scratchEnd)
                     scratchStart = newScratchStart
                     mlayout.mergeWith(pointeeLayout)
+                elif isinstance(v, AbstractPointerToUnconstrainedPublic):
+                    if v.cannotPointSecret:
+                        vaddr = scratchStart  # we decide that v's value is this
+                        mlayout.assign(elementaddr, vaddr)  # at elementaddr, we have the value (that is, pointer/address) vaddr
+                        scratchStart += v.maxPointeeSize  # reserve this scratch for the data v points to
+                        mlayout.addNotSecretAddress(vaddr)
                 else:
                     pass  # public value, and not a pointer so don't traverse it
     else:
         raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
     return (mlayout, scratchStart)
+
+def normalizeIntervals(intervals):
+    """
+    Given a list of [min, max) intervals,
+        - sort them in increasing order, and
+        - collapse contiguous intervals into a single larger interval
+    returns: new list of intervals
+    """
+    assert isinstance(intervals, list)
+    intervals.sort()
+    newIntervals = []
+    while intervals:
+        interval = intervals.pop()  # gets the interval with largest max
+        if intervals:
+            prevInterval = intervals[-1]  # the interval before that
+            while prevInterval[1] == interval[0]:  # this interval is contiguous with the previous interval
+                intervals.pop()  # remove prevInterval
+                interval[0] = prevInterval[0]  # `interval` now covers the entire range
+                if not intervals: break  # no intervals left
+                prevInterval = intervals[-1]  # now compare with the interval before _that_
+            # not contiguous with the previous interval
+        newIntervals.append(interval)
+    return newIntervals
 
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
