@@ -115,15 +115,21 @@ class SpectreExplicitState(angr.SimStatePlugin):
         state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_REGISTERS)
         state.options.add(angr.options.SYMBOLIC_INITIAL_VALUES)
 
+        secretStart = 0x1100000  # a should-be-unused part of the virtual memory space, after where CLE puts its 'externs' object
+        secretMustEnd = 0x2000000  # secrets must be stored somewhere in [secretStart, secretMustEnd)
+
         for (var, val) in self.vars:
             assert isAst(var)
             assert isinstance(val, AbstractValue)
             if val.secret:
                 raise ValueError("not implemented yet: secret arguments passed by value")
             elif isinstance(val, AbstractPointer):
-                self.secretIntervals.extend(intervalsForPointee(var, val.pointee))
+                (mlayout, newStart) = memLayoutForPointee(var, val.pointee, secretStart, secretMustEnd)
+                secretStart = newStart  # update to account for what was used in the call to memLayoutForPointee
+                self.secretIntervals.extend(mlayout.secretIntervals)
+                for (a, v) in mlayout.concreteAssignments.items():
+                    state.mem[a].uint64_t = v
 
-        secretStart = 0x1100000  # a should-be-unused part of the virtual memory space, after where CLE puts its 'externs' object
         for (mn,mx) in self.secretIntervals:
             if isAst(mn):
                 if state.solver.solution(mn, secretStart):
@@ -157,31 +163,68 @@ class SpectreExplicitState(angr.SimStatePlugin):
         """
         return self._armed
 
-def intervalsForPointee(var, pointee):
+class MemoryLayout:
+    """
+    Information about which memory addresses contain secret data,
+        and/or should contain given concrete public data
+    """
+    def __init__(self):
+        self.secretIntervals = []  # Intervals [min, max) describing secret memory locations. min is inclusive, max exclusive. Can be concrete or symbolic.
+        self.concreteAssignments = {}  # Keys are concrete addresses, values are the 64-bit values (concrete or symbolic) that should be stored there
+
+    def addSecretInterval(self, mn, mx):
+        """
+        Mark the interval [mn, mx) as containing secret data. min and max are (concrete or symbolic) addresses
+        """
+        self.secretIntervals.append((mn, mx))
+
+    def assign(self, addr, val):
+        """
+        Assign the memory at (concrete) addr to have the (concrete or symbolic) val
+        """
+        self.concreteAssignments[addr] = val
+
+    def mergeWith(self, otherMemoryLayout):
+        """
+        Incorporate all the information from otherMemoryLayout into this one
+        """
+        self.secretIntervals.extend(otherMemoryLayout.secretIntervals)
+        self.concreteAssignments.update(otherMemoryLayout.concreteAssignments)
+
+def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
     """
     var: BVS or concrete address
     pointee: AbstractValue or list of AbstractValues at that address
-    returns: list of intervals [min, max) describing secret memory locations
+    scratchStart, scratchEnd: Concrete addresses describing an available place in memroy where to lay out the data
+    returns: MemoryLayout for the given pointee, and a new value for scratchStart (pointing to where is still free to use as scratch)
     """
+    mlayout = MemoryLayout()
+    if isinstance(pointee, AbstractValue):
+        pointee = [pointee]  # treat pointer-to-value like pointer-to-array-length-1.  Reduces code duplication
     if isinstance(pointee, list):
         # val is a pointer to array or struct
         assert all(isinstance(v, AbstractValue) for v in pointee)
         if all(v.secret for v in pointee):
-            return [(var, var+8*len(pointee))]  # everything in that interval is secret
-        elif all(not v.secret for v in pointee):
-            if any(isinstance(v, AbstractPointer) for v in pointee):
-                raise ValueError("not implemented yet: pointer to struct or array containing pointers")
-            else:
-                pass  # everything in here is a public value, and we have no more pointers to traverse
+            mlayout.addSecretInterval(var, var+8*len(pointee))  # everything in that interval is secret
+            return (mlayout, scratchStart)
         else:
-            raise ValueError("not implemented yet: pointers to mixed public-and-secret data")
-    elif isinstance(pointee, AbstractPointer):
-        raise ValueError("not implemented yet: pointer to pointer")
-    elif isinstance(pointee, AbstractValue):  # all cases of AbstractValue other than AbstractPointer
-        if pointee.secret:
-            return [(var, var+8)]  # single 8-byte secret value
+            for (i, v) in enumerate(pointee):
+                elementaddr = var+i*8
+                if v.secret:
+                    mlayout.addSecretInterval(elementaddr, elementaddr+8)  # single 8-byte secret value
+                elif isinstance(v, AbstractPointer):
+                    # v is a pointer, that lives in memory at elementaddr
+                    vaddr = scratchStart  # we decide that v's value is this
+                    mlayout.assign(elementaddr, vaddr)  # at elementaddr, we have the value (that is, pointer/address) vaddr
+                    scratchStart += v.maxPointeeSize  # reserve this scratch for the data v points to
+                    (pointeeLayout, newScratchStart) = memLayoutForPointee(vaddr, v.pointee, scratchStart, scratchEnd)
+                    scratchStart = newScratchStart
+                    mlayout.mergeWith(pointeeLayout)
+                else:
+                    pass  # public value, and not a pointer so don't traverse it
     else:
         raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
+    return (mlayout, scratchStart)
 
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
@@ -192,7 +235,7 @@ def _tainted_read(state):
         #list(describeAst(leaf) for leaf in expr.leaf_asts()),
         #describeAst(addr),
         #list(describeAst(leaf) for leaf in addr.leaf_asts())))
-    return is_tainted(addr)
+    return isAst(addr) and is_tainted(addr)
 
 # Call during a breakpoint callback on 'mem_write'
 def _tainted_write(state):
@@ -203,12 +246,12 @@ def _tainted_write(state):
         #list(describeAst(leaf) for leaf in expr.leaf_asts()),
         #describeAst(addr),
         #list(describeAst(leaf) for leaf in addr.leaf_asts())))
-    return is_tainted(addr)
+    return isAst(addr) and is_tainted(addr)
 
 # Call during a breakpoint callback on 'exit' (i.e. conditional branch)
 def _tainted_branch(state):
     guard = state.inspect.exit_guard
-    return is_tainted(guard) and \
+    return isAst(guard) and is_tainted(guard) and \
         state.solver.satisfiable(extra_constraints=[guard == True]) and \
         state.solver.satisfiable(extra_constraints=[guard == False])
 

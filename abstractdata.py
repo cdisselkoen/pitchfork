@@ -24,14 +24,16 @@ class AbstractPointer(AbstractValue):
     """
     A (public) pointer to another AbstractValue, or array of AbstractValues, or struct of AbstractValues
     """
-    def __init__(self, pointee):
+    def __init__(self, pointee, maxPointeeSize=0x10000):
         """
-        val: the AbstractValue, array of AbstractValues, or struct of AbstractValues being pointed to
+        pointee: the AbstractValue, array of AbstractValues, or struct of AbstractValues being pointed to
+        pointeeSize: upper bound on the size of the value/array/struct being pointed to
         """
         super().__init__(secret=False)
         assert isinstance(pointee, AbstractValue) or \
             (isinstance(pointee, list) and all(isinstance(v, AbstractValue) for v in pointee))
         self.pointee = pointee
+        self.maxPointeeSize = maxPointeeSize
 
 class AbstractPointerToUnconstrainedPublic(AbstractValue):
     """
@@ -64,11 +66,12 @@ def secretValue():
     """
     return AbstractNonPointer(secret=True)
 
-def pointerTo(pointee):
+def pointerTo(pointee, maxPointeeSize=0x10000):
     """
     A (public) pointer to another thing constructed with one of these functions
+    maxPointeeSize: upper bound on the size of the value/array/struct being pointed to
     """
-    return AbstractPointer(pointee)
+    return AbstractPointer(pointee, maxPointeeSize)
 
 def pointerToUnconstrainedPublic():
     """

@@ -100,10 +100,10 @@ def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     if with_hash_stub: addHashblocksStub(proj)
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet", [
         ("sm", pointerToUnconstrainedPublic()),  # signed message: Output parameter, buffer of at least size [length m] + 64
-        ("smlen", pointerTo(publicValue())),  # signed message length: Output parameter where the actual length of sm is written
+        ("smlen", pointerTo(publicValue(), 8)),  # signed message length: Output parameter where the actual length of sm is written
         ("m", pointerToUnconstrainedPublic()),  # message: unconstrained length
         ("mlen", publicValue()),  # message length: length of m. Not a pointer.
-        ("sk", pointerTo(secretArray(64))),  # secret key: size 64 bytes
+        ("sk", pointerTo(secretArray(64), 64)),  # secret key: size 64 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     addDevURandom(state)
@@ -122,10 +122,10 @@ def tweetnacl_crypto_sign_open(max_messagelength=256, with_hash_stub=True):
     if with_hash_stub: addHashblocksStub(proj)
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_open", [
         ("m", pointerToUnconstrainedPublic()),  # Output parameter: message, buffer of at least size 'smlen'
-        ("mlen", pointerTo(publicValue())),  # Output parameter where the actual length of m is written
+        ("mlen", pointerTo(publicValue(), 8)),  # Output parameter where the actual length of m is written
         ("sm", pointerToUnconstrainedPublic()),  # Signed message: length 'smlen'
         ("smlen", publicValue()),  # signed message length: length of 'sm'. Not a pointer.
-        ("pk", pointerTo(publicArray(32)))  # public key: size crypto_sign_PUBLICKEYBYTES
+        ("pk", pointerTo(publicArray(32), 32))  # public key: size crypto_sign_PUBLICKEYBYTES
     ])
     state.add_constraints(getArgBVS(state, 'smlen') <= max_messagelength)
     addDevURandom(state)
@@ -139,7 +139,7 @@ def tweetnacl_crypto_sign_keypair(with_hash_stub=True):
     proj = tweetnaclProject()
     if with_hash_stub: addHashblocksStub(proj)
     state = funcEntryState(proj, "crypto_sign_ed25519_tweet_keypair",
-        [("pk", pointerTo(publicArray(32))), ("sk", pointerTo(secretArray(64)))])
+        [("pk", pointerTo(publicArray(32), 32)), ("sk", pointerTo(secretArray(64), 64))])
     addDevURandom(state)
     return (proj, state)
 
@@ -156,7 +156,7 @@ def tweetnacl_crypto_hash(max_messagelength=256, with_hashblocks_stub=True):
     proj = tweetnaclProject()
     if with_hashblocks_stub: addHashblocksStub(proj)
     state = funcEntryState(proj, "crypto_hash_sha512_tweet", [
-        ("h", pointerTo(publicArray(64))),  # Output parameter: where to put the hash. 64 bytes.
+        ("h", pointerTo(publicArray(64), 64)),  # Output parameter: where to put the hash. 64 bytes.
         ("m", pointerToUnconstrainedPublic()),  # message: length 'mlen'
         ("mlen", publicValue())  # message length: length of m. Not a pointer.
     ])
@@ -174,8 +174,8 @@ def tweetnacl_crypto_stream_salsa20(max_outputbytes=128):
     state = funcEntryState(proj, "crypto_stream_salsa20_tweet", [
         ("c", pointerToUnconstrainedPublic()),  # Output parameter, buffer of size clen
         ("clen", publicValue()),  # length of the 'c' output buffer
-        ("n", pointerTo(secretArray(8))),  # nonce, buffer of size crypto_stream_salsa20_tweet_NONCEBYTES
-        ("k", pointerTo(secretArray(32)))  # secret key: size 32 bytes
+        ("n", pointerTo(secretArray(8), 8)),  # nonce, buffer of size crypto_stream_salsa20_tweet_NONCEBYTES
+        ("k", pointerTo(secretArray(32), 32))  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_outputbytes)
     addDevURandom(state)
@@ -191,8 +191,8 @@ def tweetnacl_crypto_stream_xsalsa20(max_outputbytes=128):
     state = funcEntryState(proj, "crypto_stream_xsalsa20_tweet", [
         ("c", pointerToUnconstrainedPublic()),  # Output parameter, buffer of size clen
         ("clen", publicValue()),  # length of 'c' output buffer
-        ("n", pointerTo(secretArray(24))),  # nonce, buffer of size crypto_stream_xsalsa20_tweet_NONCEBYTES
-        ("k", pointerTo(secretArray(32)))  # secret key: size 32 bytes
+        ("n", pointerTo(secretArray(24), 24)),  # nonce, buffer of size crypto_stream_xsalsa20_tweet_NONCEBYTES
+        ("k", pointerTo(secretArray(32), 32))  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_outputbytes)
     addDevURandom(state)
@@ -205,10 +205,10 @@ def tweetnacl_crypto_onetimeauth(max_messagelength=256):
     """
     proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet", [
-        ("a", pointerTo(publicArray(16))),  # Output parameter, gets authenticator, size crypto_onetimeauth_BYTES
+        ("a", pointerTo(publicArray(16), 16)),  # Output parameter, gets authenticator, size crypto_onetimeauth_BYTES
         ("m", pointerToUnconstrainedPublic()),  # message: unconstrained length
         ("mlen", publicValue()),  # length of message. Not a pointer
-        ("k", pointerTo(secretArray(32)))  # secret key: size 32 bytes
+        ("k", pointerTo(secretArray(32), 32))  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     addDevURandom(state)
@@ -221,10 +221,10 @@ def tweetnacl_crypto_onetimeauth_verify(max_messagelength=256):
     """
     proj = tweetnaclProject()
     state = funcEntryState(proj, "crypto_onetimeauth_poly1305_tweet_verify", [
-        ("a", pointerTo(publicArray(16))),  # authenticator, size crypto_onetimeauth_BYTES
+        ("a", pointerTo(publicArray(16), 16)),  # authenticator, size crypto_onetimeauth_BYTES
         ("m", pointerToUnconstrainedPublic()),  # message: unconstrained length
         ("mlen", publicValue()),  # length of message. Not a pointer
-        ("k", pointerTo(secretArray(32)))  # secret key: size 32 bytes
+        ("k", pointerTo(secretArray(32), 32))  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     addDevURandom(state)
@@ -240,8 +240,8 @@ def tweetnacl_crypto_secretbox(max_messagelength=256):
         ("c", pointerToUnconstrainedPublic()),  # Output parameter, will hold ciphertext, length 'mlen'
         ("m", pointerToUnconstrainedPublic()),  # message: length 'mlen'
         ("mlen", publicValue()),  # length of message. Not a pointer
-        ("n", pointerTo(secretArray(24))),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
-        ("k", pointerTo(secretArray(32)))  # secret key: size 32 bytes
+        ("n", pointerTo(secretArray(24), 24)),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
+        ("k", pointerTo(secretArray(32), 32))  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     addDevURandom(state)
@@ -257,8 +257,8 @@ def tweetnacl_crypto_secretbox_open(max_messagelength=256):
         ("m", pointerToUnconstrainedPublic()),  # Output parameter, will hold plaintext, length 'clen'
         ("c", pointerToUnconstrainedPublic()),  # ciphertext, length 'clen'
         ("clen", publicValue()),  # length of ciphertext. Not a pointer
-        ("n", pointerTo(secretArray(24))),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
-        ("k", pointerTo(secretArray(32)))  # secret key: size 32 bytes
+        ("n", pointerTo(secretArray(24), 24)),  # nonce, buffer of size crypto_secretbox_NONCEBYTES
+        ("k", pointerTo(secretArray(32), 32))  # secret key: size 32 bytes
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_messagelength)
     addDevURandom(state)
@@ -274,9 +274,9 @@ def tweetnacl_crypto_box(max_messagelength=256):
         ("c", pointerToUnconstrainedPublic()),  # Output parameter, will hold ciphertext, length 'mlen'
         ("m", pointerToUnconstrainedPublic()),  # message: length 'mlen'
         ("mlen", publicValue()),  # length of message. Not a pointer
-        ("n", pointerTo(secretArray(24))),  # nonce, size crypto_box_NONCEBYTES
-        ("pk", pointerTo(publicArray(32))),  # public key, size crypto_box_PUBLICKEYBYTES
-        ("sk", pointerTo(secretArray(32)))  # secret key, size crypto_box_SECRETKEYBYTES
+        ("n", pointerTo(secretArray(24), 24)),  # nonce, size crypto_box_NONCEBYTES
+        ("pk", pointerTo(publicArray(32), 32)),  # public key, size crypto_box_PUBLICKEYBYTES
+        ("sk", pointerTo(secretArray(32), 32))  # secret key, size crypto_box_SECRETKEYBYTES
     ])
     state.add_constraints(getArgBVS(state, 'mlen') <= max_messagelength)
     addDevURandom(state)
@@ -292,9 +292,9 @@ def tweetnacl_crypto_box_open(max_messagelength=256):
         ("m", pointerToUnconstrainedPublic()),  # Output parameter, will hold plaintext, length 'clen'
         ("c", pointerToUnconstrainedPublic()),  # ciphertext: length 'clen'
         ("clen", publicValue()),  # length of ciphertext. Not a pointer
-        ("n", pointerTo(secretArray(24))),  # nonce, size crypto_box_NONCEBYTES
-        ("pk", pointerTo(publicArray(32))),  # public key, size crypto_box_PUBLICKEYBYTES
-        ("sk", pointerTo(secretArray(32)))  # secret key, size crypto_box_SECRETKEYBYTES
+        ("n", pointerTo(secretArray(24), 24)),  # nonce, size crypto_box_NONCEBYTES
+        ("pk", pointerTo(publicArray(32), 32)),  # public key, size crypto_box_PUBLICKEYBYTES
+        ("sk", pointerTo(secretArray(32), 32))  # secret key, size crypto_box_SECRETKEYBYTES
     ])
     state.add_constraints(getArgBVS(state, 'clen') <= max_messagelength)
     addDevURandom(state)
@@ -303,9 +303,9 @@ def tweetnacl_crypto_box_open(max_messagelength=256):
 def donna_no_lfence():
     proj = donnaProject()
     state = funcEntryState(proj, "crypto_scalarmult", [
-        ("mypublic", pointerTo(publicArray(32))),
-        ("secret", pointerTo(secretArray(32))),
-        ("basepoint", pointerTo(publicArray(32)))
+        ("mypublic", pointerTo(publicArray(32), 32)),
+        ("secret", pointerTo(secretArray(32), 32)),
+        ("basepoint", pointerTo(publicArray(32), 32))
     ])
     addDevURandom(state)
     return (proj, state)
@@ -313,9 +313,9 @@ def donna_no_lfence():
 def donna_lfence():
     proj = donnaProject()
     state = funcEntryState(proj, "crypto_scalarmult_lfence", [
-        ("mypublic", pointerTo(publicArray(32))),
-        ("secret", pointerTo(secretArray(32))),
-        ("basepoint", pointerTo(publicArray(32)))
+        ("mypublic", pointerTo(publicArray(32), 32)),
+        ("secret", pointerTo(secretArray(32), 32)),
+        ("basepoint", pointerTo(publicArray(32), 32))
     ])
     addDevURandom(state)
     return (proj, state)
@@ -323,7 +323,18 @@ def donna_lfence():
 def openssl_EVP_PKEY2PKCS8():
     proj = opensslProject()
     state = funcEntryState(proj, "EVP_PKEY2PKCS8", [
-        ("pkey", pointerTo(secretArray(80)))  # private key. Actually a struct with size around 80 bytes, mostly pointers.  Possible that we actually care about the data those pointers point to, not the pointers themselves, not sure.
+        ("pkey", pointerTo(struct([  # pointer to struct evp_pkey_st
+            publicValue(),  # type
+            publicValue(),  # save_type
+            publicValue(),  # references
+            pointerToUnconstrainedPublic(),  # ameth
+            pointerToUnconstrainedPublic(),  # engine
+            pointerToUnconstrainedPublic(),  # pmeth_engine
+            pointerTo(secretArray(512), 512),  # pkey union. Conservatively estimated to definitely fit within 512 bytes
+            publicValue(),  # save_parameters
+            pointerToUnconstrainedPublic(),  # attributes
+            pointerToUnconstrainedPublic()   # lock
+        ]), 128))
     ])
     addDevURandom(state)
     return (proj, state)
