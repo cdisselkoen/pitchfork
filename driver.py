@@ -5,7 +5,6 @@ from taint import taintedUnconstrainedBits
 from irop_hook import IROpHook
 from utils import *  #pylint:disable=unused-wildcard-import
 from abstractdata import publicValue, secretValue, pointerTo, pointerToUnconstrainedPublic, publicArray, secretArray, array, struct
-from abstractdata import AbstractValue, AbstractPointer
 
 import angr
 import claripy
@@ -382,33 +381,7 @@ def armSpectreOOBChecks(proj,state):
 
 def armSpectreExplicitChecks(proj, state):
     args = state.globals['args']
-    secretIntervals = []
-    for (arg, val) in args.values():
-        assert isinstance(val, AbstractValue)
-        if val.secret:
-            raise ValueError("not implemented yet: secret arguments passed by value")
-        elif isinstance(val, AbstractPointer):
-            pointee = val.pointee
-            if isinstance(pointee, list):
-                # val is a pointer to array or struct
-                assert all(isinstance(v, AbstractValue) for v in pointee)
-                if all(v.secret for v in pointee):
-                    secretIntervals.append((arg, arg+8*len(pointee)))  # everything in here is secret
-                elif all(not v.secret for v in pointee):
-                    if any(isinstance(v, AbstractPointer) for v in pointee):
-                        raise ValueError("not implemented yet: pointer to struct or array containing pointers")
-                    else:
-                        pass  # everything in here is a public value, and we have no more pointers to traverse
-                else:
-                    raise ValueError("not implemented yet: pointers to mixed public-and-secret data")
-            elif isinstance(pointee, AbstractPointer):
-                raise ValueError("not implemented yet: pointer to pointer")
-            elif isinstance(pointee, AbstractValue):
-                if pointee.secret:
-                    secretIntervals.append((arg, arg+8))  # single 8-byte secret value
-            else:
-                raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
-    state.register_plugin('spectre', SpectreExplicitState(secretIntervals))
+    state.register_plugin('spectre', SpectreExplicitState(args.values()))
     state.spectre.arm(state)
     assert state.spectre.armed()
 

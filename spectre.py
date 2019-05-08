@@ -4,6 +4,7 @@ import claripy
 from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
 from taint import taintedUnconstrainedBits, is_tainted
 from utils import isAst, describeAst
+from abstractdata import AbstractValue, AbstractPointer
 
 import logging
 l = logging.getLogger(name=__name__)
@@ -64,46 +65,82 @@ def oob_memory_fill(name, bits, state):
 class SpectreExplicitState(angr.SimStatePlugin):
     """
     State tracking for Spectre vulnerability detection.
-    This plugin treats some particular range(s) of memory addresses as secret
-    (explicitly specified as an argument to the constructor), and everything else
-    as public.
+    This plugin treats some particular range(s) of memory addresses as secret,
+        and everything else as public.
     Useful to e.g. determine if a Spectre gadget exists that can leak the secret
-    cryptographic key stored in a particular location.
+        cryptographic key stored in a particular location.
 
     This plugin does not rely on the OOB state plugin in any way.
     """
 
-    def __init__(self, secretIntervals, armed=False):
+    def __init__(self, vars=[], secretIntervals=[], armed=False):
         """
-        secretIntervals: Iterable of pairs (min, max) denoting ranges of memory to be
-        considered 'secret'
+        vars: Iterable of pairs (variable, AbstractValue) where the AbstractValue describes
+            what parts of that variable and/or the memory it points to should be considered 'secret'.
+            variable can be a concrete address or a BVS.
+        secretIntervals: Iterable of pairs (startaddr, endaddr) of memory addresses
+            denoting ranges of memory which should also be considered 'secret'.
+            Both startaddr and endaddr can be either concrete addresses or BVS's.
+            startaddr is inclusive, endaddr is exclusive.
+        armed: whether arm() has been called. Leave as False unless you're the copy constructor.
+
+        Everything in memory is considered public by default except whatever is specified by
+            `vars` and/or `secretIntervals`.
         """
         super().__init__()
-        self.secretIntervals = secretIntervals
+        self.vars = vars
         self._armed = armed
+        self.secretIntervals = secretIntervals
         self.violation = None
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
-        return SpectreExplicitState(self.secretIntervals, armed=self._armed)
+        return SpectreExplicitState(vars=self.vars, secretIntervals=self.secretIntervals, armed=self._armed)
 
     def arm(self, state):
         """
         Setup hooks and breakpoints to perform Spectre gadget vulnerability detection.
         Also set up concretization to ensure addresses always point to secret data when possible.
         """
+        if self._armed:
+            l.warn("called arm() on already-armed SpectreExplicitState")
+            return
+
         state.inspect.b('mem_read',  when=angr.BP_AFTER, condition=_tainted_read, action=detected_spectre_read)
         state.inspect.b('mem_write', when=angr.BP_AFTER, condition=_tainted_write, action=detected_spectre_write)
         state.inspect.b('exit', when=angr.BP_BEFORE, condition=_tainted_branch, action=detected_spectre_branch)
-
-        state.memory.read_strategies.insert(0, TargetedStrategy(self.secretIntervals))
-        state.memory.write_strategies.insert(0, TargetedStrategy(self.secretIntervals))
-        #state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
 
         state.options.add(angr.options.SYMBOLIC_WRITE_ADDRESSES)
         state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY)
         state.options.add(angr.options.SYMBOL_FILL_UNCONSTRAINED_REGISTERS)
         state.options.add(angr.options.SYMBOLIC_INITIAL_VALUES)
+
+        for (var, val) in self.vars:
+            assert isAst(var)
+            assert isinstance(val, AbstractValue)
+            if val.secret:
+                raise ValueError("not implemented yet: secret arguments passed by value")
+            elif isinstance(val, AbstractPointer):
+                pointee = val.pointee
+                if isinstance(pointee, list):
+                    # val is a pointer to array or struct
+                    assert all(isinstance(v, AbstractValue) for v in pointee)
+                    if all(v.secret for v in pointee):
+                        self.secretIntervals.append((var, var+8*len(pointee)))  # everything in here is secret
+                    elif all(not v.secret for v in pointee):
+                        if any(isinstance(v, AbstractPointer) for v in pointee):
+                            raise ValueError("not implemented yet: pointer to struct or array containing pointers")
+                        else:
+                            pass  # everything in here is a public value, and we have no more pointers to traverse
+                    else:
+                        raise ValueError("not implemented yet: pointers to mixed public-and-secret data")
+                elif isinstance(pointee, AbstractPointer):
+                    raise ValueError("not implemented yet: pointer to pointer")
+                elif isinstance(pointee, AbstractValue):
+                    if pointee.secret:
+                        self.secretIntervals.append((arg, arg+8))  # single 8-byte secret value
+                else:
+                    raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
 
         secretStart = 0x1100000  # a should-be-unused part of the virtual memory space, after where CLE puts its 'externs' object
         for (mn,mx) in self.secretIntervals:
@@ -114,16 +151,22 @@ class SpectreExplicitState(angr.SimStatePlugin):
                     length = state.solver.eval_one(mx-mn_as_int)  # should be only one possible value of that expression, under these constraints
                     if length is None:
                         raise ValueError("Expected one solution for {} but got these: {}".format(mx-mn_as_int, state.solver.eval(mx-mn_as_int)))
-                    mx_as_int = secretStart+length
+                    mx_as_int = mn_as_int+length
                     state.solver.add(mx == mx_as_int)
                     secretStart += length
                 else:
                     raise ValueError("Can't resolve secret address {} to desired value {}".format(mn, secretStart))
+            elif isAst(mx):
+                raise ValueError("not implemented yet: interval min {} is concrete but max {} is symbolic".format(mn, mx))
             else:
                 mn_as_int = mn
-                mx_as_int = mx  # assume that if mn is not an AST, mx isn't either
+                mx_as_int = mx
             for i in range(mn_as_int,mx_as_int):
                 state.mem[i].uint8_t = oob_memory_fill("secret", 8, state)
+
+        state.memory.read_strategies.insert(0, TargetedStrategy(self.secretIntervals))
+        state.memory.write_strategies.insert(0, TargetedStrategy(self.secretIntervals))
+        #state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
 
         self._armed = True
 
