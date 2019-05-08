@@ -121,26 +121,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
             if val.secret:
                 raise ValueError("not implemented yet: secret arguments passed by value")
             elif isinstance(val, AbstractPointer):
-                pointee = val.pointee
-                if isinstance(pointee, list):
-                    # val is a pointer to array or struct
-                    assert all(isinstance(v, AbstractValue) for v in pointee)
-                    if all(v.secret for v in pointee):
-                        self.secretIntervals.append((var, var+8*len(pointee)))  # everything in here is secret
-                    elif all(not v.secret for v in pointee):
-                        if any(isinstance(v, AbstractPointer) for v in pointee):
-                            raise ValueError("not implemented yet: pointer to struct or array containing pointers")
-                        else:
-                            pass  # everything in here is a public value, and we have no more pointers to traverse
-                    else:
-                        raise ValueError("not implemented yet: pointers to mixed public-and-secret data")
-                elif isinstance(pointee, AbstractPointer):
-                    raise ValueError("not implemented yet: pointer to pointer")
-                elif isinstance(pointee, AbstractValue):
-                    if pointee.secret:
-                        self.secretIntervals.append((arg, arg+8))  # single 8-byte secret value
-                else:
-                    raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
+                self.secretIntervals.extend(intervalsForPointee(var, val.pointee))
 
         secretStart = 0x1100000  # a should-be-unused part of the virtual memory space, after where CLE puts its 'externs' object
         for (mn,mx) in self.secretIntervals:
@@ -175,6 +156,32 @@ class SpectreExplicitState(angr.SimStatePlugin):
         Has arm() been called?
         """
         return self._armed
+
+def intervalsForPointee(var, pointee):
+    """
+    var: BVS or concrete address
+    pointee: AbstractValue or list of AbstractValues at that address
+    returns: list of intervals [min, max) describing secret memory locations
+    """
+    if isinstance(pointee, list):
+        # val is a pointer to array or struct
+        assert all(isinstance(v, AbstractValue) for v in pointee)
+        if all(v.secret for v in pointee):
+            return [(var, var+8*len(pointee))]  # everything in that interval is secret
+        elif all(not v.secret for v in pointee):
+            if any(isinstance(v, AbstractPointer) for v in pointee):
+                raise ValueError("not implemented yet: pointer to struct or array containing pointers")
+            else:
+                pass  # everything in here is a public value, and we have no more pointers to traverse
+        else:
+            raise ValueError("not implemented yet: pointers to mixed public-and-secret data")
+    elif isinstance(pointee, AbstractPointer):
+        raise ValueError("not implemented yet: pointer to pointer")
+    elif isinstance(pointee, AbstractValue):  # all cases of AbstractValue other than AbstractPointer
+        if pointee.secret:
+            return [(var, var+8)]  # single 8-byte secret value
+    else:
+        raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
 
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
