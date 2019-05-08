@@ -69,7 +69,7 @@ def verboseStep(proj, simgr, asm=True):
     else:
         oldaddr = simgr.active[0].addr
         simgr.step()
-        newaddr = simgr.active[0].addr
+        newaddr = simgr.active[0].addr if simgr.active else None
         oldsymb = proj.loader.find_symbol(oldaddr, fuzzy=False)
         if oldsymb:
             print("Just executed (top of function {}):".format(oldsymb.name))
@@ -83,6 +83,9 @@ def verboseStep(proj, simgr, asm=True):
         elif asm is not None: showbbVEX(proj, oldaddr)
         else: print("block {}".format(oldaddr))
         print("===============")
+        if newaddr is None:
+            print("Execution finished")
+            return
         newsymb = proj.loader.find_symbol(newaddr, fuzzy=False)
         if newsymb:
             print("About to execute (top of function {}):".format(newsymb.name))
@@ -103,6 +106,20 @@ def runUntilRetFrom(simgr, calladdr):
         Assumes it's a callq or some other 5-byte instruction
     """
     simgr.run(until=lambda s: s.active[0].addr == calladdr+5)
+
+def stashAllButFirst(simgr):
+    """
+    Stash all the active states in the simgr except the first
+    """
+    first = simgr.active[0]
+    simgr.stash(filter_func=lambda s: s is not first)
+
+def stashFirst(simgr):
+    """
+    Stash the first active state in the simgr
+    """
+    first = simgr.active[0]
+    simgr.stash(filter_func=lambda s: s is first)
 
 def stepTogether(simgrA, simgrB):
     """
