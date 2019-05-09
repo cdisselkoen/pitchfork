@@ -64,7 +64,10 @@ def verboseStep(proj, simgr, asm=True):
         If False then show blocks as VEX IR instructions.
         If None then don't show block contents, only block addresses.
     """
-    if len(simgr.active) > 1:
+    if not simgr.active:
+        print("No active states")
+        return
+    elif len(simgr.active) > 1:
         print("Please stash all but one active state before using verboseStep")
         return
     oldaddr = simgr.active[0].addr
@@ -111,10 +114,10 @@ def describeUpcomingBlock(proj, simgr, asm=True):
 def runUntilRetFrom(proj, simgr, calladdr, asm=True):
     """
     calladdr: address of the call instruction (NOT the address of the called function)
-        Assumes it's a callq or some other 5-byte instruction
     asm: see notes on verboseStep
     """
-    simgr.run(until=lambda s: s.active[0].addr == calladdr+5)
+    def atReturn(candidateAddr): return (candidateAddr > calladdr) and (candidateAddr <= calladdr+5)  # technically a heuristic, but should basically always work
+    simgr.run(until=lambda sim: any(atReturn(s.addr) for s in sim.active))
     describeUpcomingBlock(proj, simgr, asm=asm)
 
 def stashAllButFirst(proj, simgr, asm=True):
@@ -122,6 +125,9 @@ def stashAllButFirst(proj, simgr, asm=True):
     Stash all the active states in the simgr except the first.
     asm: see notes on verboseStep
     """
+    if not simgr.active:
+        print("No active states: nothing to stash")
+        return
     first = simgr.active[0]
     simgr.stash(filter_func=lambda s: s is not first)
     describeUpcomingBlock(proj, simgr, asm=asm)
@@ -131,6 +137,9 @@ def stashFirst(proj, simgr, asm=True):
     Stash the first active state in the simgr
     asm: see notes on verboseStep
     """
+    if not simgr.active:
+        print("No active states: nothing to stash")
+        return
     first = simgr.active[0]
     simgr.stash(filter_func=lambda s: s is first)
     describeUpcomingBlock(proj, simgr, asm=asm)
