@@ -342,6 +342,7 @@ def openssl_EVP_PKEY2PKCS8():
         ("pkey", pointerTo(abstractEVP_PKEY(), 128, cannotPointSecret=True))
     ])
     addDevURandom(state)
+    addEVPStubs(proj)
     return (proj, state)
 
 def openssl_ASN1_item_sign():
@@ -356,6 +357,7 @@ def openssl_ASN1_item_sign():
         ("type", pointerToUnconstrainedPublic())
     ])
     addDevURandom(state)
+    addEVPStubs(proj)
     return (proj, state)
 
 # Set up checking

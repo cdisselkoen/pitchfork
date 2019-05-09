@@ -2,6 +2,7 @@
 
 import angr
 from taint import taintedUnconstrainedBits
+from utils import describeAst
 import logging
 l = logging.getLogger(__name__)
 
@@ -39,3 +40,54 @@ class RandomBytesStub(angr.SimProcedure):
 
 def makeRandomBytesSecret(proj):
     proj.hook_symbol("randombytes", RandomBytesStub())
+
+class EVP_PKEY_meth_find_stub(angr.SimProcedure):
+    """
+    Stub for OpenSSL's EVP_PKEY_meth_find()
+    """
+    def __init__(self, proj):
+        super().__init__()
+        self.proj = proj  # keep around a pointer to proj (for symbol resolution)
+
+    #def display_name(self):
+        #return "<Stub object for EVP_PKEY_meth_find>"
+
+    def run(self, type_int):
+        l.info("stubbing out a call to EVP_PKEY_meth_find")
+        # In my current understanding, this method searches through a static list of EVP_PKEY_METHOD objects
+        #   looking for one that has its first field equal to the provided `type_int` argument.
+        # We simply perform this functionality here rather than symexing the binary search.
+        names = [
+            "rsa_pkey_meth",
+            "dh_pkey_meth",
+            "dsa_pkey_meth",
+            "ec_pkey_meth",
+            "hmac_pkey_meth",
+            "cmac_pkey_meth",
+            "rsa_pss_pkey_meth",
+            "dhx_pkey_meth",
+            "scrypt_pkey_meth",
+            "tls1_prf_pkey_meth",
+            "ecx25519_pkey_meth",
+            "ecx448_pkey_meth",
+            "hkdf_pkey_meth",
+            "poly1305_pkey_meth",
+            "siphash_pkey_meth",
+            "ed25519_pkey_meth",
+            "ed448_pkey_meth",
+            "sm2_pkey_meth"
+        ]
+        possible_meths = (self.proj.loader.find_symbol(name).rebased_addr for name in names)
+        for meth in possible_meths:
+            if meth is None: continue
+            meth_pkey_id = self.state.mem[meth].int32_t
+            if self.state.solver.solution(type_int, meth_pkey_id):
+                # Since I'm not sure how to fork for each possible return value,
+                # for now we just use the first match
+                self.state.add_constraints(type_int == meth_pkey_id)
+                return meth
+        raise ValueError("couldn't find a valid method, type was {}".format(describeAst(type_int)))
+
+def addEVPStubs(proj):
+    # for now, just one EVP-related stub
+    proj.hook_symbol("EVP_PKEY_meth_find", EVP_PKEY_meth_find_stub(proj))
