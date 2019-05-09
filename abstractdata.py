@@ -84,14 +84,15 @@ def pointerTo(pointee, maxPointeeSize=0x10000, cannotPointSecret=False):
     """
     return AbstractPointer(pointee, maxPointeeSize=maxPointeeSize, cannotPointSecret=cannotPointSecret)
 
-def pointerToUnconstrainedPublic(cannotPointSecret=False):
+def pointerToUnconstrainedPublic(maxPointeeSize=0x10000, cannotPointSecret=False):
     """
     A (public) pointer to unconstrained public data, which could be a public value,
         an array (of unconstrained size) of public values, or a public data structure
+    maxPointeeSize: upper bound on the size of the value/array/struct being pointed to
     cannotPointSecret: if True, we assert that this pointer _cannot_ point (directly)
         to any secret data, even by aliasing with a pointer to secret data
     """
-    return AbstractPointerToUnconstrainedPublic(cannotPointSecret=cannotPointSecret)
+    return AbstractPointerToUnconstrainedPublic(maxPointeeSize=maxPointeeSize, cannotPointSecret=cannotPointSecret)
 
 def publicArray(lengthInBytes):
     """

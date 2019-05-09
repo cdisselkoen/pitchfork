@@ -327,13 +327,13 @@ def abstractEVP_PKEY():
     """
     return struct([
         publicValue(), publicValue(),  # type, save_type, and references (total 128 bits I guess?)
-        pointerToUnconstrainedPublic(cannotPointSecret=True),  # ameth
-        pointerToUnconstrainedPublic(),  # engine
-        pointerToUnconstrainedPublic(),  # pmeth_engine
+        pointerToUnconstrainedPublic(maxPointeeSize=36*8, cannotPointSecret=True),  # ameth
+        pointerToUnconstrainedPublic(cannotPointSecret=True),  # engine
+        pointerToUnconstrainedPublic(cannotPointSecret=True),  # pmeth_engine
         pointerTo(secretArray(512), 512),  # pkey union. Conservatively estimated to definitely fit within 512 bytes
         publicValue(),  # save_parameters
-        pointerToUnconstrainedPublic(),  # attributes
-        pointerToUnconstrainedPublic()   # lock
+        pointerToUnconstrainedPublic(cannotPointSecret=True),  # attributes
+        pointerToUnconstrainedPublic(cannotPointSecret=True)   # lock
     ])
 
 def openssl_EVP_PKEY2PKCS8():
