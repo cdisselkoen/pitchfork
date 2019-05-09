@@ -66,60 +66,74 @@ def verboseStep(proj, simgr, asm=True):
     """
     if len(simgr.active) > 1:
         print("Please stash all but one active state before using verboseStep")
+        return
+    oldaddr = simgr.active[0].addr
+    simgr.step()
+    oldsymb = proj.loader.find_symbol(oldaddr, fuzzy=False)
+    if oldsymb:
+        print("Just executed (top of function {}):".format(oldsymb.name))
     else:
-        oldaddr = simgr.active[0].addr
-        simgr.step()
-        newaddr = simgr.active[0].addr if simgr.active else None
-        oldsymb = proj.loader.find_symbol(oldaddr, fuzzy=False)
+        oldsymb = proj.loader.find_symbol(oldaddr, fuzzy=True)
         if oldsymb:
-            print("Just executed (top of function {}):".format(oldsymb.name))
+            print("Just executed (in function {}):".format(oldsymb.name))
         else:
-            oldsymb = proj.loader.find_symbol(oldaddr, fuzzy=True)
-            if oldsymb:
-                print("Just executed (in function {}):".format(oldsymb.name))
-            else:
-                print("Just executed (unknown function):")
-        if asm: showbbASM(proj, oldaddr)
-        elif asm is not None: showbbVEX(proj, oldaddr)
-        else: print("block {}".format(oldaddr))
-        print("===============")
-        if newaddr is None:
-            print("Execution finished")
-            return
-        newsymb = proj.loader.find_symbol(newaddr, fuzzy=False)
-        if newsymb:
-            print("About to execute (top of function {}):".format(newsymb.name))
+            print("Just executed (unknown function):")
+    if asm: showbbASM(proj, oldaddr)
+    elif asm is not None: showbbVEX(proj, oldaddr)
+    else: print("block {}".format(hex(oldaddr)))
+    print("===============")
+    describeUpcomingBlock(proj, simgr, asm=asm)
+
+def describeUpcomingBlock(proj, simgr, asm=True):
+    """
+    asm: see notes on verboseStep
+    """
+    if not simgr.active:
+        print("Execution finished")
+    if len(simgr.active) > 1:
+        print("Multiple resulting states, at {}".format(list(hex(s.addr) for s in simgr.active)))
+    else:
+        addr = simgr.active[0].addr
+        symb = proj.loader.find_symbol(addr, fuzzy=False)
+        if symb:
+            print("About to execute (top of function {}):".format(symb.name))
         else:
-            newsymb = proj.loader.find_symbol(newaddr, fuzzy=True)
-            if newsymb:
-                print("About to execute (in function {}):".format(newsymb.name))
+            symb = proj.loader.find_symbol(addr, fuzzy=True)
+            if symb:
+                print("About to execute (in function {}):".format(symb.name))
             else:
                 print("About to execute (unknown function):")
-        if asm: showbbASM(proj, newaddr)
-        elif asm is not None: showbbVEX(proj, newaddr)
-        else: print("block {}".format(newaddr))
-        print("\nCurrently at instruction {}".format(hex(newaddr)))
+        if asm: showbbASM(proj, addr)
+        elif asm is not None: showbbVEX(proj, addr)
+        else: print("block {}".format(hex(addr)))
+        print("\nCurrently at instruction {}".format(hex(addr)))
 
-def runUntilRetFrom(simgr, calladdr):
+def runUntilRetFrom(proj, simgr, calladdr, asm=True):
     """
     calladdr: address of the call instruction (NOT the address of the called function)
         Assumes it's a callq or some other 5-byte instruction
+    asm: see notes on verboseStep
     """
     simgr.run(until=lambda s: s.active[0].addr == calladdr+5)
+    describeUpcomingBlock(proj, simgr, asm=asm)
 
-def stashAllButFirst(simgr):
+def stashAllButFirst(proj, simgr, asm=True):
     """
-    Stash all the active states in the simgr except the first
+    Stash all the active states in the simgr except the first.
+    asm: see notes on verboseStep
     """
     first = simgr.active[0]
     simgr.stash(filter_func=lambda s: s is not first)
+    describeUpcomingBlock(proj, simgr, asm=asm)
 
-def stashFirst(simgr):
+def stashFirst(proj, simgr, asm=True):
     """
     Stash the first active state in the simgr
+    asm: see notes on verboseStep
     """
     first = simgr.active[0]
     simgr.stash(filter_func=lambda s: s is first)
+    describeUpcomingBlock(proj, simgr, asm=asm)
 
 def stepTogether(simgrA, simgrB):
     """
