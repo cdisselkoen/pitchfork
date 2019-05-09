@@ -49,9 +49,6 @@ class EVP_PKEY_meth_find_stub(angr.SimProcedure):
         super().__init__()
         self.proj = proj  # keep around a pointer to proj (for symbol resolution)
 
-    #def display_name(self):
-        #return "<Stub object for EVP_PKEY_meth_find>"
-
     def run(self, type_int):
         l.info("stubbing out a call to EVP_PKEY_meth_find")
         # In my current understanding, this method searches through a static list of EVP_PKEY_METHOD objects
