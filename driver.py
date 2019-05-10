@@ -321,14 +321,15 @@ def donna_lfence():
     addDevURandom(state)
     return (proj, state)
 
-def abstractEVP_PKEY():
+def abstractEVP_PKEY(engineNull=True):
     """
     Abstract representation of an EVP_PKEY aka struct evp_pkey_st
+    engineNull: if True, then the 'engine' field will be forced to NULL rather than unconstrained
     """
     return struct([
         publicValue(), publicValue(),  # type, save_type, and references (total 128 bits I guess?)
         pointerToUnconstrainedPublic(maxPointeeSize=36*8, cannotPointSecret=True),  # ameth
-        pointerToUnconstrainedPublic(cannotPointSecret=True),  # engine
+        publicValue(0) if engineNull else pointerToUnconstrainedPublic(cannotPointSecret=True),  # engine
         pointerToUnconstrainedPublic(cannotPointSecret=True),  # pmeth_engine
         pointerTo(secretArray(512), 512),  # pkey union. Conservatively estimated to definitely fit within 512 bytes
         publicValue(),  # save_parameters

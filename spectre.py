@@ -122,6 +122,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
         for (var, val) in self.vars:
             assert isAst(var)
             assert isinstance(val, AbstractValue)
+            if val.value is not None: state.add_constraints(var == val.value)
             if val.secret:
                 raise ValueError("not implemented yet: secret arguments passed by value")
             elif isinstance(val, AbstractPointer):
@@ -243,14 +244,16 @@ def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
         assert all(isinstance(v, AbstractValue) for v in pointee)
         if all(v.secret for v in pointee):
             mlayout.addSecretInterval(var, var+8*len(pointee))  # everything in that interval is secret
+            # we don't bother checking for v.value for secret v, since it doesn't matter to the analysis
         else:
             for (i, v) in enumerate(pointee):
                 elementaddr = var+i*8
                 if v.secret:
                     mlayout.addSecretInterval(elementaddr, elementaddr+8)  # single 8-byte secret value
+                    # we don't bother checking for v.value for secret v, since it doesn't matter to the analysis
                 elif isinstance(v, AbstractPointer):
                     # v is a pointer, that lives in memory at elementaddr
-                    vaddr = scratchStart  # we decide that v's value is this
+                    vaddr = v.value if v.value is not None else scratchStart  # we decide that v's value is this
                     mlayout.assign(elementaddr, vaddr)  # at elementaddr, we have the value (that is, pointer/address) vaddr
                     scratchStart += v.maxPointeeSize  # reserve this scratch for the data v points to
                     if v.cannotPointSecret: mlayout.addNotSecretAddress(vaddr)
@@ -258,13 +261,13 @@ def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
                     scratchStart = newScratchStart
                     mlayout.mergeWith(pointeeLayout)
                 elif isinstance(v, AbstractPointerToUnconstrainedPublic):
-                    if v.cannotPointSecret:
-                        vaddr = scratchStart  # we decide that v's value is this
+                    if v.cannotPointSecret or v.value is not None:  # these are the two cases where we must actually allocate
+                        vaddr = v.value if v.value is not None else scratchStart  # we decide that v's value is this
                         mlayout.assign(elementaddr, vaddr)  # at elementaddr, we have the value (that is, pointer/address) vaddr
                         scratchStart += v.maxPointeeSize  # reserve this scratch for the data v points to
-                        mlayout.addNotSecretAddress(vaddr)
+                        if v.cannotPointSecret: mlayout.addNotSecretAddress(vaddr)
                 else:
-                    pass  # public value, and not a pointer so don't traverse it
+                    if v.value is not None: mlayout.assign(elementaddr, v.value)
     else:
         raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
     return (mlayout, scratchStart)

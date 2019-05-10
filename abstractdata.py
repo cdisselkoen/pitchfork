@@ -8,11 +8,13 @@ class AbstractValue:
 
     Intended to be a base class: don't directly instantiate this, instantiate one of its subclasses below
     """
-    def __init__(self, secret, cannotPointSecret=False):
+    def __init__(self, *, value=None, secret, cannotPointSecret=False):  # secret is a required argument but must be keyworded by caller
         """
+        value: If not None, then a (concrete or symbolic) value which this AbstractValue must be equal to
         secret: boolean, whether the value is secret or not
         """
         self.secret = secret
+        self.value = value
 
 class AbstractNonPointer(AbstractValue):
     """
@@ -63,17 +65,19 @@ class AbstractSecretPointer(AbstractValue):
 
 # Use these functions to create abstract values
 
-def publicValue():
+def publicValue(value=None):
     """
     A single public 64-bit value
+    value: if not None, then a specific (concrete or symbolic) value which this value takes on
     """
-    return AbstractNonPointer(secret=False)
+    return AbstractNonPointer(value=value, secret=False)
 
-def secretValue():
+def secretValue(value=None):
     """
     A single secret 64-bit value
+    value: if not None, then a specific (concrete or symbolic) value which this value takes on
     """
-    return AbstractNonPointer(secret=True)
+    return AbstractNonPointer(value=value, secret=True)
 
 def pointerTo(pointee, maxPointeeSize=0x10000, cannotPointSecret=False):
     """
@@ -101,7 +105,7 @@ def publicArray(lengthInBytes):
     """
     if lengthInBytes % 8 != 0:
         raise ValueError("not implemented yet: array sizes not multiples of 8 bytes")
-    return [AbstractValue(False) for _ in range(lengthInBytes//8)]
+    return [publicValue() for _ in range(lengthInBytes//8)]
 
 def secretArray(lengthInBytes):
     """
@@ -110,7 +114,7 @@ def secretArray(lengthInBytes):
     """
     if lengthInBytes % 8 != 0:
         raise ValueError("not implemented yet: array sizes not multiples of 8 bytes")
-    return [AbstractValue(True) for _ in range(lengthInBytes//8)]
+    return [secretValue() for _ in range(lengthInBytes//8)]
 
 def array(values):
     """
