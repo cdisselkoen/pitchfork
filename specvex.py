@@ -66,8 +66,8 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
             branchcond = guard
             notbranchcond = claripy.Not(branchcond)
-            if not state.solver.is_true(branchcond): exit_state.spec.append(branchcond)  # don't bother adding a deferred 'True' constraint
-            if not state.solver.is_true(notbranchcond): cont_state.spec.append(notbranchcond)  # don't bother adding a deferred 'True' constraint
+            if not state.solver.is_true(branchcond): exit_state.spec.conditionals.append(branchcond)  # don't bother adding a deferred 'True' constraint
+            if not state.solver.is_true(notbranchcond): cont_state.spec.conditionals.append(notbranchcond)  # don't bother adding a deferred 'True' constraint
 
             successors.add_successor(exit_state, target, guard, jumpkind, add_guard=False,
                                     exit_stmt_idx=state.scratch.stmt_idx, exit_ins_addr=state.scratch.ins_addr)
@@ -85,14 +85,14 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
         return True
 
 class SpecState(angr.SimStatePlugin):
-    def __init__(self, spec_window_size, ins=0, conds=None):
+    def __init__(self, spec_window_size, ins=0, conditionals=None):
         super().__init__()
         self._spec_window_size = spec_window_size
         self.ins_executed = ins
-        if conds is not None:
-          self.conditionals = conds
+        if conditionals is not None:
+            self.conditionals = conditionals
         else:
-          self.conditionals = collections.deque()
+            self.conditionals = SpecQueue(ins)
         self.mispredicted = False
 
     def arm(self, state):
@@ -101,51 +101,69 @@ class SpecState(angr.SimStatePlugin):
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
-        return SpecState(self._spec_window_size, self.ins_executed, self.conditionals.copy())
+        return SpecState(spec_window_size=self._spec_window_size, ins=self.ins_executed, conditionals=self.conditionals.copy())
 
     def tick(self):
         # we count instructions executed here because I couldn't find an existing place (e.g. state.history) where instructions are counted.
         # (TODO state.scratch.num_insns? is the 'scratch' reliably persistent?)
         # Also, this may miss instructions handled by other engines, but TODO that is presumably few?
         self.ins_executed += 1
+        self.conditionals.tick()
 
-    def append(self, condition):
-        self.conditionals.append((condition, self.ins_executed))
+class SpecQueue:
+    """
+    holds objects which are currently in-flight/unresolved
+    """
+    def __init__(self, ins_executed=0, q=None):
+        self.ins_executed = ins_executed
+        if q is None:
+            self.q = collections.deque()
+        else:
+            self.q = q
 
-    def ageOfOldestConditional(self):
-        if self.conditionals:
-            (_, whenadded) = self.conditionals[0]  # peek
+    def copy(self):
+        return SpecQueue(ins_executed=self.ins_executed, q=self.q.copy())
+
+    def tick(self):
+        self.ins_executed += 1
+
+    def append(self, thing):
+        self.q.append((thing, self.ins_executed))
+
+    def ageOfOldest(self):
+        if self.q:
+            (_, whenadded) = self.q[0]  # peek
             return self.ins_executed - whenadded
         else:
             return None
 
-    def popOldestConditional(self):
-        (cond, _) = self.conditionals.popleft()
-        return cond
+    def popOldest(self):
+        (thing, _) = self.q.popleft()
+        return thing
 
-    def popAllConditionals(self):
+    def popAll(self):
         """
-        A generator that pops each conditional and yields it
+        A generator that pops each thing and yields it
         """
-        while self.conditionals:
-            (cond, _) = self.conditionals.popleft()
-            yield cond
+        while self.q:
+            (thing, _) = self.q.popleft()
+            yield thing
 
 def tickSpecState(state):
     # Keep track of how many instructions we have executed
     state.spec.tick()
 
     # See if it is time to retire the oldest conditional, that is, end possible wrong-path execution
-    age = state.spec.ageOfOldestConditional()
+    age = state.spec.conditionals.ageOfOldest()
     while age and age > state.spec._spec_window_size:
-        cond = state.spec.popOldestConditional()
+        cond = state.spec.conditionals.popOldest()
         l.debug("time {}: adding deferred conditional (age {}): {}".format(state.spec.ins_executed, age, cond))
         state.add_constraints(cond)
         # See if the newly added constraint makes us unsat, if so, kill this state
         if angr.sim_options.LAZY_SOLVES not in state.options and not state.solver.satisfiable():
             l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
             state.spec.mispredicted = True
-        age = state.spec.ageOfOldestConditional()  # check next conditional
+        age = state.spec.conditionals.ageOfOldest()  # check next conditional
 
 def handleFences(state):
     """
@@ -154,7 +172,7 @@ def handleFences(state):
     stmt = state.scratch.irsb.statements[state.inspect.statement]
     if type(stmt) == pyvex.stmt.MBE and stmt.event == "Imbe_Fence":
         l.debug("time {}: encountered a fence, flushing all deferred constraints".format(state.spec.ins_executed))
-        state.add_constraints(*list(state.spec.popAllConditionals()))
+        state.add_constraints(*list(state.spec.conditionals.popAll()))
         # See if this has made us unsat, if so, kill this state
         if angr.sim_options.LAZY_SOLVES not in state.options and not state.solver.satisfiable():
             l.debug("killing mispredicted path: constraints not satisfiable: {}".format(state.solver.constraints))
