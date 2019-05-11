@@ -592,12 +592,19 @@ def runallKocher(**kwargs):
         {s:kocherSimgr(s, **kwargs) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
         {('11'+s):kocher11Simgr(s, **kwargs) for s in ['gcc','ker','sub']})
 
-def alltests(kocher=True, tweetnacl=True):
+def runallForwarding(**kwargs):
+    return { "1" : forwarding1Simgr(**kwargs),
+             "2" : forwarding2Simgr(**kwargs),
+             "3" : forwarding3Simgr(**kwargs)
+           }
+
+def alltests(kocher=True, forwarding=True, tweetnacl=True):
     """
     kocher: whether to run Kocher tests
+    forwarding: whether to run forwarding tests
     tweetnacl: whether to run TweetNaCl tests
     """
-    if not kocher and not tweetnacl:
+    if not kocher and not forwarding and not tweetnacl:
         raise ValueError("no tests specified")
     logging.getLogger('specvex').setLevel(logging.WARNING)
     logging.getLogger('spectre').setLevel(logging.WARNING)
@@ -605,6 +612,10 @@ def alltests(kocher=True, tweetnacl=True):
     if kocher:
         kocher_notspec = runallKocher(spec=False)
         kocher_spec = runallKocher(spec=True)
+    if forwarding:
+        forwarding_notspec = runallForwarding(spec=False)
+        forwarding_spec = runallForwarding(spec=True, misforwarding=False)
+        forwarding_forwarding = runallForwarding(spec=True, misforwarding=True)
     if tweetnacl:
         tweetnacl_notspec = runallTweetNacl(spec=False)
         tweetnacl_spec = runallTweetNacl(spec=True)
@@ -614,22 +625,30 @@ def alltests(kocher=True, tweetnacl=True):
         return ("FAIL: detected a violation without speculative execution" if violationDetected(kocher_notspec[s])
             else "FAIL: no violation detected" if not violationDetected(kocher_spec[s])
             else "PASS")
+    def forwarding_testResult(s):
+        return ("FAIL: detected a violation without speculative execution" if violationDetected(forwarding_notspec[s])
+            else "FAIL: detected a violation without misforwarding" if violationDetected(forwarding_spec[s])
+            else "FAIL: no violation detected" if not violationDetected(forwarding_forwarding[s])
+            else "PASS")
     def tweetnacl_testResult(s):
         return ("FAIL: detected a violation without speculative execution" if violationDetected(tweetnacl_notspec[s])
             else "violation detected" if violationDetected(tweetnacl_spec[s])
             else "no violation detected")
-    if kocher:
-        kocher_results = {k:kocher_testResult(k) for k in kocher_spec.keys()}
-    if tweetnacl:
-        tweetnacl_results = {k:tweetnacl_testResult(k) for k in tweetnacl_spec.keys()}
-    if kocher and not tweetnacl:
+    kocher_results = {k:kocher_testResult(k) for k in kocher_spec.keys()} if kocher else None
+    forwarding_results = {k:forwarding_testResult(k) for k in forwarding_spec.keys()} if forwarding else None
+    tweetnacl_results = {k:tweetnacl_testResult(k) for k in tweetnacl_spec.keys()} if tweetnacl else None
+    if kocher and not forwarding and not tweetnacl:
         print("Kocher tests:")
         return kocher_results
-    elif tweetnacl and not kocher:
+    elif forwarding and not kocher and not tweetnacl:
+        print("Forwarding tests:")
+        return forwarding_results
+    elif tweetnacl and not kocher and not forwarding:
         print("TweetNaCl tests:")
         return tweetnacl_results
-    elif tweetnacl and kocher:
+    else:
         return {"Kocher tests":kocher_results,
+                "Forwarding tests":forwarding_results,
                 "TweetNaCl tests":tweetnacl_results}
 
 def unionDicts(dicta, dictb):
