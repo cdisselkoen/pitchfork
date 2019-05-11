@@ -16,7 +16,7 @@
         then proceed with the standard angr installation using the pypy virtualenv. Inside this virtualenv, `python` should give you a pypy interpreter rather than an ordinary Python one.
     - This code has only been tested with PyPy 7.1.0-beta0 (which implements Python 3.6.1).
 - Inside your Python virtualenv, run `python driver.py` to run tests against all the Kocher
-test cases
-- Current status / explanations of expected test results is in [kocher_analysis.txt](kocher_analysis.txt)
-- For things other than Kocher test cases, look at the functions in driver.py
+test cases and our forwarding test cases
+- Current status / explanations of expected Kocher test results is in [kocher_analysis.txt](kocher_analysis.txt)
+- For things other than Kocher and forwarding test cases, look at the functions in driver.py
 - Some useful utilities for interactive investigation are in utils.py (imported with driver.py)
