@@ -19,4 +19,4 @@
 test cases and our forwarding test cases
 - Current status / explanations of expected Kocher test results is in [kocher_analysis.txt](kocher_analysis.txt)
 - For things other than Kocher and forwarding test cases, look at the functions in driver.py
-- Some useful utilities for interactive investigation are in utils.py (imported with driver.py)
+- Some useful utilities for interactive investigation are in [utils.py](utils.py) (imported with [driver.py](driver.py))
