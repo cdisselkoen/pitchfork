@@ -32,12 +32,12 @@ def funcEntryState(proj, funcname, args):
         is a pair (name, val) where:
         name: either None, in which case you get a default name 'arg1', 'arg2', etc
             or a custom name to use for the argument BVS
-        val: an AbstractValue denoting the structure of the argument
+        val: an AbstractValue denoting the structure of the argument, including its bitlength
             See notes in abstractdata.py
     """
     funcaddr = proj.loader.find_symbol(funcname).rebased_addr
     argnames = list("arg{}".format(i) if name is None else name for (i, (name, _)) in enumerate(args))
-    argBVSs = list(claripy.BVS(name, 64) for name in argnames)
+    argBVSs = list(claripy.BVS(name, val.bits) for (name, (_, val)) in zip(argnames, args))
     state = proj.factory.call_state(funcaddr, *argBVSs)
     state.globals['args'] = {argname:(argBVS, val) for (argname, (_, val), argBVS) in zip(argnames, args, argBVSs)}
     state.register_plugin('irop_hook', IROpHook())
@@ -55,7 +55,9 @@ def kocher(s):
     """
     proj = angr.Project('spectector-clang/'+s+'.o')
     funcname = "victim_function_v"+s
-    if s in ('10','12'):
+    if s == '10':
+        state = funcEntryState(proj, funcname, [(None, publicValue()), (None, publicValue(bits=8))])
+    elif s == '12':
         state = funcEntryState(proj, funcname, [(None, publicValue()), (None, publicValue())])
     elif s == '09':
         state = funcEntryState(proj, funcname, [(None, publicValue()), (None, pointerToUnconstrainedPublic())])
@@ -327,7 +329,9 @@ def abstractEVP_PKEY(engineNull=True):
     engineNull: if True, then the 'engine' field will be forced to NULL rather than unconstrained
     """
     return struct([
-        publicValue(), publicValue(),  # type, save_type, and references (total 128 bits I guess?)
+        publicValue(bits=32),  # type
+        publicValue(bits=32),  # save_type
+        publicValue(bits=64), # references (experimentally seems to be 64 bits?)
         pointerToUnconstrainedPublic(maxPointeeSize=36*8, cannotPointSecret=True),  # ameth
         publicValue(0) if engineNull else pointerToUnconstrainedPublic(cannotPointSecret=True),  # engine
         pointerToUnconstrainedPublic(cannotPointSecret=True),  # pmeth_engine

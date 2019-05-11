@@ -3,16 +3,18 @@
 
 class AbstractValue:
     """
-    Abstract representation of a 64-bit value, either public or secret.
+    Abstract representation of any value, either public or secret.
     Note that as of this writing, the secret/public distinction is only used by SpectreExplicitState.
 
     Intended to be a base class: don't directly instantiate this, instantiate one of its subclasses below
     """
-    def __init__(self, *, value=None, secret, cannotPointSecret=False):  # secret is a required argument but must be keyworded by caller
+    def __init__(self, *, bits=64, value=None, secret):  # secret is a required argument but must be keyworded by caller
         """
+        bits: how many bits long the value is
         value: If not None, then a (concrete or symbolic) value which this AbstractValue must be equal to
         secret: boolean, whether the value is secret or not
         """
+        self.bits = bits
         self.secret = secret
         self.value = value
 
@@ -33,7 +35,7 @@ class AbstractPointer(AbstractValue):
         cannotPointSecret: if True, we assert that this pointer _cannot_ point (directly) to any secret data,
             even by aliasing with a pointer to secret data
         """
-        super().__init__(secret=False)
+        super().__init__(bits=64, secret=False)  # we assume 64-bit pointers
         assert isinstance(pointee, AbstractValue) or \
             (isinstance(pointee, list) and all(isinstance(v, AbstractValue) for v in pointee))
         self.pointee = pointee
@@ -51,7 +53,7 @@ class AbstractPointerToUnconstrainedPublic(AbstractValue):
         cannotPointSecret: if True, we assert that this pointer _cannot_ point (directly)
             to any secret data, even by aliasing with a pointer to secret data
         """
-        super().__init__(secret=False)
+        super().__init__(bits=64, secret=False)  # we assume 64-bit pointers
         self.maxPointeeSize = maxPointeeSize
         self.cannotPointSecret = cannotPointSecret
 
@@ -61,23 +63,25 @@ class AbstractSecretPointer(AbstractValue):
     """
     def __init__(self):
         # Currently treat this the same as a secret non-pointer, but reserve the right to treat it differently in the future
-        super().__init__(secret=True)
+        super().__init__(bits=64, secret=True)  # we assume 64-bit pointers
 
 # Use these functions to create abstract values
 
-def publicValue(value=None):
+def publicValue(value=None, bits=64):
     """
-    A single public 64-bit value
+    A single public value
+    bits: how many bits long the value is
     value: if not None, then a specific (concrete or symbolic) value which this value takes on
     """
-    return AbstractNonPointer(value=value, secret=False)
+    return AbstractNonPointer(bits=bits, value=value, secret=False)
 
-def secretValue(value=None):
+def secretValue(value=None, bits=64):
     """
-    A single secret 64-bit value
+    A single secret value
+    bits: how many bits long the value is
     value: if not None, then a specific (concrete or symbolic) value which this value takes on
     """
-    return AbstractNonPointer(value=value, secret=True)
+    return AbstractNonPointer(bits=bits, value=value, secret=True)
 
 def pointerTo(pointee, maxPointeeSize=0x10000, cannotPointSecret=False):
     """

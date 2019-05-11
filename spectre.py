@@ -131,9 +131,13 @@ class SpectreExplicitState(angr.SimStatePlugin):
                 secretStart = newStart  # update to account for what was used in the call to memLayoutForPointee
                 self.secretIntervals.extend(mlayout.secretIntervals)
                 notSecretAddresses.extend(mlayout.notSecretAddresses)
-                for (a, v) in mlayout.concreteAssignments.items():
-                    #print("Assigning address {} to value {}".format(describeAst(a), describeAst(v)))
-                    state.mem[a].uint64_t = v
+                for (a, (v, bits)) in mlayout.concreteAssignments.items():
+                    #print("Assigning address {} to value {}, {} bits".format(describeAst(a), describeAst(v), bits))
+                    if bits == 8: state.mem[a].uint8_t = v
+                    elif bits == 16: state.mem[a].uint16_t = v
+                    elif bits == 32: state.mem[a].uint32_t = v
+                    elif bits == 64: state.mem[a].uint64_t = v
+                    else: raise ValueError("unexpected bitlength: {}".format(bits))
             elif isinstance(val, AbstractPointerToUnconstrainedPublic):
                 if val.cannotPointSecret: notSecretAddresses.append(var)
             #print("Secret intervals:")
@@ -188,7 +192,7 @@ class MemoryLayout:
     """
     def __init__(self):
         self.secretIntervals = []  # Intervals [min, max) describing secret memory locations. min is inclusive, max exclusive. Can be concrete or symbolic.
-        self.concreteAssignments = {}  # Keys are concrete addresses, values are the 64-bit values (concrete or symbolic) that should be stored there
+        self.concreteAssignments = {}  # Keys are concrete addresses, values are pairs (val, bits) where 'val' is the value (concrete or symbolic) to be stored at that location, and 'bits' is the bitlength of 'val'
         self.notSecretAddresses = []  # Addresses (probably symbolic) which we assert _cannot_ point (directly) to any secret data, even by aliasing with a pointer to secret data
 
     def addSecretInterval(self, mn, mx):
@@ -197,11 +201,11 @@ class MemoryLayout:
         """
         self.secretIntervals.append((mn, mx))
 
-    def assign(self, addr, val):
+    def assign(self, addr, val, bits):
         """
-        Assign the memory at (concrete) addr to have the (concrete or symbolic) val
+        Assign the memory at (concrete) 'addr' to have the (concrete or symbolic) 'val' with bitlength 'bits'
         """
-        self.concreteAssignments[addr] = val
+        self.concreteAssignments[addr] = (val, bits)
 
     def addNotSecretAddress(self, addr):
         self.notSecretAddresses.append(addr)
@@ -222,8 +226,8 @@ class MemoryLayout:
         for (mn, mx) in self.secretIntervals:
             r += "\n[{}, {})".format(describeAst(mn), describeAst(mx))
         r += "\nAssignments:"
-        for (a, v) in self.concreteAssignments.items():
-            r += "\nAddress {} gets value {}".format(describeAst(a), describeAst(v))
+        for (a, (v, bits)) in self.concreteAssignments.items():
+            r += "\nAddress {} gets value {}, {} bits".format(describeAst(a), describeAst(v), bits)
         r += "\nNot-secret addresses:"
         for addr in self.notSecretAddresses:
             r += "\n{}".format(describeAst(addr))
@@ -243,18 +247,20 @@ def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
         # val is a pointer to array or struct
         assert all(isinstance(v, AbstractValue) for v in pointee)
         if all(v.secret for v in pointee):
-            mlayout.addSecretInterval(var, var+8*len(pointee))  # everything in that interval is secret
+            totalBitLength = sum(v.bits for v in pointee)
+            mlayout.addSecretInterval(var, var + (totalBitLength // 8))  # everything in that interval is secret
             # we don't bother checking for v.value for secret v, since it doesn't matter to the analysis
         else:
-            for (i, v) in enumerate(pointee):
-                elementaddr = var+i*8
+            bytesSoFar = 0
+            for v in pointee:
+                elementaddr = var + bytesSoFar
                 if v.secret:
-                    mlayout.addSecretInterval(elementaddr, elementaddr+8)  # single 8-byte secret value
+                    mlayout.addSecretInterval(elementaddr, elementaddr + (v.bits // 8))  # single secret value
                     # we don't bother checking for v.value for secret v, since it doesn't matter to the analysis
                 elif isinstance(v, AbstractPointer):
                     # v is a pointer, that lives in memory at elementaddr
                     vaddr = v.value if v.value is not None else scratchStart  # we decide that v's value is this
-                    mlayout.assign(elementaddr, vaddr)  # at elementaddr, we have the value (that is, pointer/address) vaddr
+                    mlayout.assign(elementaddr, vaddr, v.bits)  # at elementaddr, we have the value (that is, pointer/address) vaddr
                     scratchStart += v.maxPointeeSize  # reserve this scratch for the data v points to
                     if v.cannotPointSecret: mlayout.addNotSecretAddress(vaddr)
                     (pointeeLayout, newScratchStart) = memLayoutForPointee(vaddr, v.pointee, scratchStart, scratchEnd)
@@ -263,11 +269,12 @@ def memLayoutForPointee(var, pointee, scratchStart, scratchEnd):
                 elif isinstance(v, AbstractPointerToUnconstrainedPublic):
                     if v.cannotPointSecret or v.value is not None:  # these are the two cases where we must actually allocate
                         vaddr = v.value if v.value is not None else scratchStart  # we decide that v's value is this
-                        mlayout.assign(elementaddr, vaddr)  # at elementaddr, we have the value (that is, pointer/address) vaddr
+                        mlayout.assign(elementaddr, vaddr, v.bits)  # at elementaddr, we have the value (that is, pointer/address) vaddr
                         scratchStart += v.maxPointeeSize  # reserve this scratch for the data v points to
                         if v.cannotPointSecret: mlayout.addNotSecretAddress(vaddr)
                 else:
-                    if v.value is not None: mlayout.assign(elementaddr, v.value)
+                    if v.value is not None: mlayout.assign(elementaddr, v.value, v.bits)
+                bytesSoFar += v.bits // 8  # advance to the next element
     else:
         raise ValueError("pointee {} not a list or AbstractValue".format(pointee))
     return (mlayout, scratchStart)
