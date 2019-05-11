@@ -396,14 +396,16 @@ def makeSpeculative(proj, state, window=250, misforwarding=False):
     state.spec.arm(state, misforwarding=misforwarding)
     assert state.spec.ins_executed == 0
 
-def getSimgr(proj, state, spec=True, window=None):
+def getSimgr(proj, state, spec=True, window=None, misforwarding=False):
     """
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    misforwarding: whether to enable misforwarding features, i.e., speculatively
+        missing a forward from an inflight store. No effect if spec=False.
     """
     if spec:
-        if window is not None: makeSpeculative(proj,state,window)
-        else: makeSpeculative(proj,state)
+        if window is not None: makeSpeculative(proj,state,window,misforwarding=misforwarding)
+        else: makeSpeculative(proj,state,misforwarding=misforwarding)
     simgr = proj.factory.simgr(state, save_unsat=False)
     if state.has_plugin('oob'):
         simgr.use_technique(OOBViolationFilter())
@@ -438,7 +440,7 @@ def describeActiveStates(simgr):
 
 # 'Driver' functions
 
-def _spectreSimgr(getProjState, getProjStateArgs, funcname, checks, spec=True, window=None, run=True):
+def _spectreSimgr(getProjState, getProjStateArgs, funcname, checks, spec=True, window=None, misforwarding=False, run=True):
     """
     getProjState: a function which, when called with getProjStateArgs, produces a pair (proj, state)
     getProjStateArgs: list of arguments to pass to the getProjState function
@@ -446,6 +448,8 @@ def _spectreSimgr(getProjState, getProjStateArgs, funcname, checks, spec=True, w
     checks: either 'OOB' for SpectreOOBChecks or 'explicit' for SpectreExplicitChecks
     spec: whether to enable speculative execution
     window: size of speculative window (~ROB) in x86 instructions. None (the default) to use default value
+    misforwarding: whether to enable misforwarding features, i.e., speculatively
+        missing a forward from an inflight store. No effect if spec=False.
     run: if True, runs the simgr before returning it
     """
     l.info("Running {} {} speculative execution".format(funcname, "with" if spec else "without"))
@@ -453,79 +457,81 @@ def _spectreSimgr(getProjState, getProjStateArgs, funcname, checks, spec=True, w
     if checks == 'OOB': armSpectreOOBChecks(proj,state)
     elif checks == 'explicit': armSpectreExplicitChecks(proj,state)
     else: raise ValueError("Expected `checks` to be either 'OOB' or 'explicit', got {}".format(checks))
-    simgr = getSimgr(proj, state, spec=spec, window=window)
+    simgr = getSimgr(proj, state, spec=spec, window=window, misforwarding=misforwarding)
     if run: return runSimgr(simgr)
     else: return simgr
 
 """
-For docs on the arguments to all of the below functions see docs on _spectreSimgr()
+All of the below simgr-related functions can take any of the keyword arguments that
+    _spectreSimgr() takes, i.e., `spec`, `window`, `misforwarding`, and `run`.
+See docs on _spectreSimgr().
 """
 
-def cryptoSignSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_sign, [], "TweetNaCl crypto_sign", "explicit", spec=spec, window=window, run=run)
+def cryptoSignSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_sign, [], "TweetNaCl crypto_sign", "explicit", **kwargs)
 
-def cryptoSignKeypairSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_sign_keypair, [], "TweetNaCl crypto_sign_keypair", "explicit", spec=spec, window=window, run=run)
+def cryptoSignKeypairSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_sign_keypair, [], "TweetNaCl crypto_sign_keypair", "explicit", **kwargs)
 
-def cryptoSignOpenSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_sign_open, [], "TweetNaCl crypto_sign_open", "explicit", spec=spec, window=window, run=run)
+def cryptoSignOpenSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_sign_open, [], "TweetNaCl crypto_sign_open", "explicit", **kwargs)
 
-def cryptoHashSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_hash, [], "TweetNaCl crypto_hash", "explicit", spec=spec, window=window, run=run)
+def cryptoHashSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_hash, [], "TweetNaCl crypto_hash", "explicit", **kwargs)
 
-def cryptoStreamSalsa20Simgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_stream_salsa20, [], "TweetNaCl crypto_stream_salsa20", "explicit", spec=spec, window=window, run=run)
+def cryptoStreamSalsa20Simgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_stream_salsa20, [], "TweetNaCl crypto_stream_salsa20", "explicit", **kwargs)
 
-def cryptoStreamXSalsa20Simgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_stream_xsalsa20, [], "TweetNaCl crypto_stream_xsalsa20", "explicit", spec=spec, window=window, run=run)
+def cryptoStreamXSalsa20Simgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_stream_xsalsa20, [], "TweetNaCl crypto_stream_xsalsa20", "explicit", **kwargs)
 
-def cryptoOnetimeauthSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_onetimeauth, [], "TweetNaCl crypto_onetimeauth", "explicit", spec=spec, window=window, run=run)
+def cryptoOnetimeauthSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_onetimeauth, [], "TweetNaCl crypto_onetimeauth", "explicit", **kwargs)
 
-def cryptoOnetimeauthVerifySimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_onetimeauth_verify, [], "TweetNaCl crypto_onetimeauth_verify", "explicit", spec=spec, window=window, run=run)
+def cryptoOnetimeauthVerifySimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_onetimeauth_verify, [], "TweetNaCl crypto_onetimeauth_verify", "explicit", **kwargs)
 
-def cryptoSecretBoxSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_secretbox, [], "TweetNaCl crypto_secretbox", "explicit", spec=spec, window=window, run=run)
+def cryptoSecretBoxSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_secretbox, [], "TweetNaCl crypto_secretbox", "explicit", **kwargs)
 
-def cryptoSecretBoxOpenSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_secretbox_open, [], "TweetNaCl crypto_secretbox_open", "explicit", spec=spec, window=window, run=run)
+def cryptoSecretBoxOpenSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_secretbox_open, [], "TweetNaCl crypto_secretbox_open", "explicit", **kwargs)
 
-def cryptoBoxSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_box, [], "TweetNaCl crypto_box", "explicit", spec=spec, window=window, run=run)
+def cryptoBoxSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_box, [], "TweetNaCl crypto_box", "explicit", **kwargs)
 
-def cryptoBoxOpenSimgr(spec=True, window=None, run=True):
-    return _spectreSimgr(tweetnacl_crypto_box_open, [], "TweetNaCl crypto_box_open", "explicit", spec=spec, window=window, run=run)
+def cryptoBoxOpenSimgr(**kwargs):
+    return _spectreSimgr(tweetnacl_crypto_box_open, [], "TweetNaCl crypto_box_open", "explicit", **kwargs)
 
-def kocherSimgr(s, spec=True, window=None, run=True):
-    return _spectreSimgr(kocher, [s], "Kocher test case " + s, "OOB", spec=spec, window=window, run=run)
+def kocherSimgr(s, **kwargs):
+    return _spectreSimgr(kocher, [s], "Kocher test case " + s, "OOB", **kwargs)
 
-def kocher11Simgr(s, spec=True, window=None, run=True):
-    return _spectreSimgr(kocher11, [s], "Kocher test case 11" + s, "OOB", spec=spec, window=window, run=run)
+def kocher11Simgr(s, **kwargs):
+    return _spectreSimgr(kocher11, [s], "Kocher test case 11" + s, "OOB", **kwargs)
 
-def donnaSimgr(lfence=False, spec=True, window=None, run=True):
-    return _spectreSimgr(donna_lfence if lfence else donna_no_lfence, [], "Donna {} lfence".format("with" if lfence else "without"), "explicit", spec=spec, window=window, run=run)
+def donnaSimgr(lfence=False, **kwargs):
+    return _spectreSimgr(donna_lfence if lfence else donna_no_lfence, [], "Donna {} lfence".format("with" if lfence else "without"), "explicit", **kwargs)
 
-def openssl_EVP_PKEY2PKCS8_simgr(spec=True, window=None, run=True):
-    return _spectreSimgr(openssl_EVP_PKEY2PKCS8, [], "OpenSSL EVP_PKEY2PKCS8", "explicit", spec=spec, window=window, run=run)
+def openssl_EVP_PKEY2PKCS8_simgr(**kwargs):
+    return _spectreSimgr(openssl_EVP_PKEY2PKCS8, [], "OpenSSL EVP_PKEY2PKCS8", "explicit", **kwargs)
 
-def openssl_ASN1_item_sign_simgr(spec=True, window=None, run=True):
-    return _spectreSimgr(openssl_ASN1_item_sign, [], "OpenSSL ASN1_item_sign", "explicit", spec=spec, window=window, run=run)
+def openssl_ASN1_item_sign_simgr(**kwargs):
+    return _spectreSimgr(openssl_ASN1_item_sign, [], "OpenSSL ASN1_item_sign", "explicit", **kwargs)
 
-def runallTweetNacl(spec=True, window=None):
-    return { "crypto_sign":cryptoSignSimgr(spec=spec, window=window),
-             "crypto_sign_keypair":cryptoSignKeypairSimgr(spec=spec, window=window),
-             "crypto_stream_salsa20":cryptoStreamSalsa20Simgr(spec=spec, window=window),
-             "crypto_stream_xsalsa20":cryptoStreamXSalsa20Simgr(spec=spec, window=window),
-             "crypto_onetimeauth":cryptoOnetimeauthSimgr(spec=spec, window=window),
-             "crypto_onetimeauth_verify":cryptoOnetimeauthVerifySimgr(spec=spec, window=window),
-             "crypto_secretbox":cryptoSecretBoxSimgr(spec=spec, window=window),
-             "crypto_secretbox_open":cryptoSecretBoxOpenSimgr(spec=spec, window=window),
-             "crypto_box":cryptoBoxSimgr(spec=spec, window=window),
-             "crypto_box_open":cryptoBoxOpenSimgr(spec=spec, window=window)
+def runallTweetNacl(**kwargs):
+    return { "crypto_sign":cryptoSignSimgr(**kwargs),
+             "crypto_sign_keypair":cryptoSignKeypairSimgr(**kwargs),
+             "crypto_stream_salsa20":cryptoStreamSalsa20Simgr(**kwargs),
+             "crypto_stream_xsalsa20":cryptoStreamXSalsa20Simgr(**kwargs),
+             "crypto_onetimeauth":cryptoOnetimeauthSimgr(**kwargs),
+             "crypto_onetimeauth_verify":cryptoOnetimeauthVerifySimgr(**kwargs),
+             "crypto_secretbox":cryptoSecretBoxSimgr(**kwargs),
+             "crypto_secretbox_open":cryptoSecretBoxOpenSimgr(**kwargs),
+             "crypto_box":cryptoBoxSimgr(**kwargs),
+             "crypto_box_open":cryptoBoxOpenSimgr(**kwargs),
            }
 
-def runallKocher(spec=True, window=None):
+def runallKocher(**kwargs):
     return unionDicts(
         # if '05' is immediately after either '04' or '06' here, it fails (detects a
         #   violation even with spec=False).
@@ -538,8 +544,8 @@ def runallKocher(spec=True, window=None):
         #   should be, i.e. any state that could persist across runKocher() calls.
         # (wishing for a language like Haskell or Rust where functions can't have
         #   arbitrary global side effects and we can't have hidden global mutable state)
-        {s:kocherSimgr(s, spec=spec, window=window) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
-        {('11'+s):kocher11Simgr(s, spec=spec, window=window) for s in ['gcc','ker','sub']})
+        {s:kocherSimgr(s, **kwargs) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
+        {('11'+s):kocher11Simgr(s, **kwargs) for s in ['gcc','ker','sub']})
 
 def alltests(kocher=True, tweetnacl=True):
     """
