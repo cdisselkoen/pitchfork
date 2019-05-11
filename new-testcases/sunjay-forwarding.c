@@ -81,3 +81,12 @@ void example_3(uint64_t idx, uint8_t mask) {
         temp += 2;
     }
 }
+
+// Provided just so this can compile into a complete binary.
+// Clearly, these inputs will not result in leaked secrets themselves.
+int main() {
+    example_1(0, 0, 0);
+    example_2(0);
+    example_3(0, 0);
+    return 0;
+}

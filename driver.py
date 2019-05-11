@@ -77,7 +77,7 @@ def kocher11(s):
     return (proj, state)
 
 def forwardingTestcasesProject():
-    return angr.Project('new-testcases/sunjay-forwarding.o')
+    return angr.Project('new-testcases/sunjay-forwarding')
 
 def tweetnaclProject():
     proj = angr.Project('tweetnacl/testbinaryO3')
