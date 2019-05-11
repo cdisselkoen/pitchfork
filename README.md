@@ -16,3 +16,5 @@
 - Inside your Python virtualenv, run `python driver.py` to run tests against all the Kocher
 test cases
 - Current status / explanations of expected test results is in [kocher_analysis.txt](kocher_analysis.txt)
+- For things other than Kocher test cases, look at the functions in driver.py
+- Some useful utilities for interactive investigation are in utils.py (imported with driver.py)
