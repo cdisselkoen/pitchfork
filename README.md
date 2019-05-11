@@ -13,6 +13,7 @@
         source [your_virtualenv_name]/bin/activate
         ```
         then proceed with the standard angr installation using the pypy virtualenv. Inside this virtualenv, `python` should give you a pypy interpreter rather than an ordinary Python one.
+    - This code has only been tested with PyPy 7.1.0-beta0 (which implements Python 3.6.1).
 - Inside your Python virtualenv, run `python driver.py` to run tests against all the Kocher
 test cases
 - Current status / explanations of expected test results is in [kocher_analysis.txt](kocher_analysis.txt)
