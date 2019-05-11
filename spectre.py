@@ -171,7 +171,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
 
         state.memory.read_strategies.insert(0, TargetedStrategy(self.secretIntervals))
         state.memory.write_strategies.insert(0, TargetedStrategy(self.secretIntervals))
-        state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
+        #state.inspect.b('address_concretization', when=angr.BP_AFTER, condition=concretization_succeeded, action=log_concretization)
 
         self._armed = True
 
