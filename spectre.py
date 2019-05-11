@@ -280,13 +280,13 @@ def normalizeIntervals(intervals):
     returns: new list of intervals
     """
     assert isinstance(intervals, list)
-    intervals.sort()
+    intervals.sort(key=lambda pair: -1 if (isAst(pair[0]) or isAst(pair[1])) else pair[0])  # sort all symbolic intervals to beginning, otherwise sort by low coordinate
     newIntervals = []
     while intervals:
         interval = intervals.pop()  # gets the interval with largest max
         if intervals:
             prevInterval = intervals[-1]  # the interval before that
-            while prevInterval[1] == interval[0]:  # this interval is contiguous with the previous interval
+            while isDefinitelyEqual(prevInterval[1], interval[0]):  # this interval is contiguous with the previous interval
                 intervals.pop()  # remove prevInterval
                 interval[0] = prevInterval[0]  # `interval` now covers the entire range
                 if not intervals: break  # no intervals left
@@ -294,6 +294,11 @@ def normalizeIntervals(intervals):
             # not contiguous with the previous interval
         newIntervals.append(interval)
     return newIntervals
+
+def isDefinitelyEqual(a,b):
+    if isinstance(a, int) and isinstance(b, int): return a == b
+    if isAst(a) or isAst(b): return (a == b).is_true()
+    raise ValueError("not sure what to do about {} and {} with types {} and {}".format(a,b,type(a),type(b)))
 
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
