@@ -76,10 +76,8 @@ def kocher11(s):
     state = funcEntryState(proj, "victim_function_v11", [(None, publicValue())])
     return (proj, state)
 
-def blatantOOB():
-    proj = angr.Project('blatantOOB.o')
-    state = funcEntryState(proj, "victim_function_v01", [(None, publicValue())])
-    return (proj, state)
+def forwardingTestcasesProject():
+    return angr.Project('new-testcases/sunjay-forwarding.o')
 
 def tweetnaclProject():
     proj = angr.Project('tweetnacl/testbinaryO3')
@@ -91,6 +89,39 @@ def donnaProject():
 
 def opensslProject():
     return angr.Project('openssl/openssl')
+
+def forwarding_example_1():
+    proj = forwardingTestcasesProject()
+    state = funcEntryState(proj, "example_1", [
+        ("idx", publicValue(bits=64)),
+        ("val", publicValue(bits=8)),
+        ("idx2", publicValue(bits=64))
+    ])
+    secretaddr = proj.loader.find_symbol('secretarray').rebased_addr
+    secretarray_size = 16  # bytes
+    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    return (proj, state)
+
+def forwarding_example_2():
+    proj = forwardingTestcasesProject()
+    state = funcEntryState(proj, "example_2", [
+        ("idx", publicValue(bits=64))
+    ])
+    secretaddr = proj.loader.find_symbol('secretarray').rebased_addr
+    secretarray_size = 16  # bytes
+    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    return (proj, state)
+
+def forwarding_example_3():
+    proj = forwardingTestcasesProject()
+    state = funcEntryState(proj, "example_3", [
+        ("idx", publicValue(bits=64)),
+        ("mask", publicValue(bits=8))
+    ])
+    secretaddr = proj.loader.find_symbol('secretarray').rebased_addr
+    secretarray_size = 16  # bytes
+    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    return (proj, state)
 
 def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     """
@@ -381,7 +412,8 @@ def armSpectreOOBChecks(proj,state):
 
 def armSpectreExplicitChecks(proj, state):
     args = state.globals['args']
-    state.register_plugin('spectre', SpectreExplicitState(args.values()))
+    otherSecrets = state.globals['otherSecrets'] if 'otherSecrets' in state.globals else []
+    state.register_plugin('spectre', SpectreExplicitState(vars=args.values(), secretIntervals=otherSecrets))
     state.spectre.arm(state)
     assert state.spectre.armed()
 
@@ -470,6 +502,15 @@ All of the below simgr-related functions can take any of the keyword arguments t
     _spectreSimgr() takes, i.e., `spec`, `window`, `misforwarding`, and `run`.
 See docs on _spectreSimgr().
 """
+
+def forwarding1Simgr(**kwargs):
+    return _spectreSimgr(forwarding_example_1, [], "forwarding example 1", "explicit", **kwargs)
+
+def forwarding2Simgr(**kwargs):
+    return _spectreSimgr(forwarding_example_2, [], "forwarding example 2", "explicit", **kwargs)
+
+def forwarding3Simgr(**kwargs):
+    return _spectreSimgr(forwarding_example_3, [], "forwarding example 3", "explicit", **kwargs)
 
 def cryptoSignSimgr(**kwargs):
     return _spectreSimgr(tweetnacl_crypto_sign, [], "TweetNaCl crypto_sign", "explicit", **kwargs)
