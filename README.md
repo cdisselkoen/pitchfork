@@ -1,5 +1,6 @@
 # How to Run
 
+- Clone this repo
 - Install [angr](https://github.com/angr/angr) using the directions [here](https://docs.angr.io/introductory-errata/install)
     - NOTE: currently only works with angr version 8.19.4.5 (latest in Pip as of this writing).
         - Actually, currently requires a small patch against angr; the patched version is available
@@ -8,7 +9,7 @@
         rather than the standard Python interpreter. E.g., on Mac:
         ```bash
         brew install pypy3
-        cd /path/to/where/you/want/angr/to/live
+        cd /path/to/where/you/cloned/this/repo
         pypy3 -m venv [whatever_you_want_to_name_your_virtualenv]
         source [your_virtualenv_name]/bin/activate
         ```
