@@ -109,7 +109,7 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                     guard_ao = SimActionObject(guard, deps=guard_deps, state=l_state)
                     size_ao = SimActionObject(converted_size_bits)
                     r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, data=data_ao, condition=guard_ao, size=size_ao, fallback=alt_ao)
-                    state.history.add_action(r)
+                    l_state.history.add_action(r)
 
                 if l_state is not state:
                     target = stmt.addr + stmt.delta  # next instruction
