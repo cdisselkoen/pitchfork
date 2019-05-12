@@ -224,6 +224,13 @@ class SpecQueue:
         """
         self.q[i] = lam(self.q[i])
 
+    def getAllOldestFirst(self):
+        """
+        Yield all of the things in the queue, oldest first
+        """
+        for (thing, _) in self.q:
+            yield thing
+
 def tickSpecState(state):
     # Keep track of how many instructions we have executed
     state.spec.tick()
