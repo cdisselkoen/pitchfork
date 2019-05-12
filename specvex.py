@@ -75,11 +75,63 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                     l_state._inspect('expr', BP_AFTER, expr=load, expr_result=l_value)
                     l_state.scratch.store_tmp(stmt.tmp, l_value, deps=data_deps)
 
+                    # now we tell angr about the fork, so it continues executing the state
                     if l_state is not state:
                         target = nextInstruction(state, stmt)
                         jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
                         guard = claripy.BVV(1, 1)  # boolean True
+                        l.debug("time {}: forking for misforwarding".format(state.spec.ins_executed))
                         successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
+
+            # we've now completely handled this statement manually, we're done
+            return True
+
+        if type(stmt) == pyvex.IRStmt.LoadG:
+            # we also duplicate the processing for this ourselves, because we potentially need to fork during load processing
+            with state.history.subscribe_actions() as addr_deps:
+                addr = self.handle_expression(state, stmt.addr)
+            with state.history.subscribe_actions() as alt_deps:
+                alt = self.handle_expression(state, stmt.alt)
+            with state.history.subscribe_actions() as guard_deps:
+                guard = self.handle_expression(state, stmt.guard)
+            if guard is not None and state.solver.satisfiable(extra_constraints=[claripy.Not(guard)]):
+                raise ValueError("not implemented yet: conditional load with condition that could be false")
+
+            read_type, converted_type = stmt.cvt_types
+            read_size_bits = pyvex.const.get_type_size(read_type)
+            converted_size_bits = pyvex.const.get_type_size(converted_type)
+            read_size = read_size_bits // state.arch.byte_width
+
+            results = performLoadWithPossibleForwarding(state, addr, read_size, load_endness=stmt.end)
+
+            for (l_state, l_value) in results:
+                if read_size_bits == converted_size_bits:
+                    converted_expr = l_value
+                elif "S" in stmt.cvt:
+                    converted_expr = l_value.sign_extend(converted_size_bits - read_size_bits)
+                elif "U" in stmt.cvt:
+                    converted_expr = l_value.zero_extend()
+                else:
+                    raise SimStatementError("Unrecognized IRLoadGOp %s!" % stmt.cvt)
+                l_value = l_state.solver.If(guard != 0, converted_expr, alt)
+                l_state.scratch.store_tmp(stmt.dst, l_value, deps=addr_deps + alt_deps + guard_deps)
+                if angr.options.TRACK_MEMORY_ACTIONS in l_state.options:
+                    data_ao = SimActionObject(converted_expr)
+                    alt_ao = SimActionObject(alt, deps=alt_deps, state=l_state)
+                    addr_ao = SimActionObject(addr, deps=addr_deps, state=l_state)
+                    guard_ao = SimActionObject(guard, deps=guard_deps, state=l_state)
+                    size_ao = SimActionObject(converted_size_bits)
+                    r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, data=data_ao, condition=guard_ao, size=size_ao, fallback=alt_ao)
+                    l_state.history.add_action(r)
+
+                # now we tell angr about the fork, so it continues executing the state
+                if l_state is not state:
+                    target = nextInstruction(state, stmt)
+                    jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
+                    guard = claripy.BVV(1, 1)  # boolean True
+                    l.debug("time {}: forking for misforwarding".format(state.spec.ins_executed))
+                    successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
+
             # we've now completely handled this statement manually, we're done
             return True
 
@@ -96,7 +148,7 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             exit_data = stmt_handler(self, state, stmt)
 
         # handling conditional exits is where the magic happens
-        if exit_data is not None and len(exit_data) == 3:
+        if exit_data is not None:
             target, guard, jumpkind = exit_data
 
             l.debug("time {}: forking for conditional exit to {} under guard {}".format(state.spec.ins_executed, target, guard))
@@ -125,40 +177,6 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             # Haven't thought about how speculation should interact with merging.
             # More fundamentally, what is scratch.guard used for when add_guard=False? Anything?
             #cont_state.scratch.guard = claripy.And(cont_state.scratch.guard, notbranchcond)
-
-        elif exit_data is not None and len(exit_data) > 3:
-            # a tremendous hack, see notes in angr/engines/vex/statements/loadg.py
-            # but here we do forking for loads, to account for the various forwarding possibilities
-            (stmt, addr, read_expr, alt, guard, read_size_bits, converted_size_bits, addr_deps, alt_deps, guard_deps) = exit_data
-            if guard is not None and not guard.is_true():
-                raise ValueError("not implemented yet: conditional load")
-            for (l_state, l_value) in read_expr:
-                # we finish the load, performing all the steps we skipped in angr/engines/vex/statements/loadg.py, see notes there
-                if read_size_bits == converted_size_bits:
-                    converted_expr = l_value
-                elif "S" in stmt.cvt:
-                    converted_expr = l_value.sign_extend(converted_size_bits - read_size_bits)
-                elif "U" in stmt.cvt:
-                    converted_expr = l_value.zero_extend()
-                else:
-                    raise SimStatementError("Unrecognized IRLoadGOp %s!" % stmt.cvt)
-                l_value = l_state.solver.If(guard != 0, converted_expr, alt)
-                l_state.scratch.store_tmp(stmt.dst, l_value, deps=addr_deps +  alt_deps + guard_deps)
-                if angr.options.TRACK_MEMORY_ACTIONS in l_state.options:
-                    data_ao = SimActionObject(converted_expr)
-                    alt_ao = SimActionObject(alt, deps=alt_deps, state=l_state)
-                    addr_ao = SimActionObject(addr, deps=addr_deps, state=l_state)
-                    guard_ao = SimActionObject(guard, deps=guard_deps, state=l_state)
-                    size_ao = SimActionObject(converted_size_bits)
-                    r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, data=data_ao, condition=guard_ao, size=size_ao, fallback=alt_ao)
-                    l_state.history.add_action(r)
-
-                # now we tell angr about the fork, so it continues executing the state
-                if l_state is not state:
-                    target = stmt.addr + stmt.delta  # next instruction
-                    jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
-                    l.debug("time {}: forking for misforwarding".format(state.spec.ins_executed))
-                    successors.add_successor(l_state, target, True, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
         return True
 
