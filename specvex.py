@@ -334,14 +334,8 @@ def tickSpecState(state):
     #   (they will get this value or newer)
     age = state.spec.stores.ageOfOldest()
     while age and age > state.spec._spec_window_size:
-        addr, value, cond, endness, action, poisoned = state.spec.stores.popOldest()
-        if poisoned:  # see notes on SpecState
-            l.debug("time {}: killing path due to incorrect forwarding".format(state.spec.ins_executed))
-            state.spec.mispredicted = True
-            return
-        else:
-            l.debug("time {}: performing deferred store (age {}): address {}, data {}, condition {}".format(state.spec.ins_executed, age, addr, value, cond))
-            state.memory.store(addr, value, condition=cond, endness=endness, action=action)
+        retireStore(state, state.spec.stores.popOldest())
+        if state.spec.mispredicted: return
         age = state.spec.stores.ageOfOldest()  # check next store
 
 def handleFences(state):
@@ -357,13 +351,17 @@ def handleFences(state):
             l.debug("time {}: killing mispredicted path: constraints not satisfiable: {}".format(state.spec.ins_executed, state.solver.constraints))
             state.spec.mispredicted = True
             return
-        for (addr, value, cond, endness, action, poisoned) in state.spec.stores.popAll():
-            if poisoned:  # see notes on SpecState
-                l.debug("time {}: killing path due to incorrect forwarding".format(state.spec.ins_executed))
-                state.spec.mispredicted = True
-                return
-            else:
-                state.memory.store(addr, value, condition=cond, endness=endness, action=action)
+        for store in state.spec.stores.popAll():
+            retireStore(state, store)
+            if state.spec.mispredicted: return
+
+def retireStore(state, store):
+    (addr, value, cond, endness, action, poisoned) = store
+    if poisoned:  # see notes on SpecState
+        l.debug("time {}: killing path due to incorrect forwarding".format(state.spec.ins_executed))
+        state.spec.mispredicted = True
+    else:
+        state.memory.store(addr, value, condition=cond, endness=endness, action=action)
 
 class StoreHook(angr.SimStatePlugin):
     """
