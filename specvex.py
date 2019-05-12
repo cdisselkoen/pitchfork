@@ -329,7 +329,23 @@ class StoreHook(angr.SimStatePlugin):
     (requires our fork of angr to actually respect the hook)
     """
     def do_store(self, state, addr, expr, condition, endness, action):
+        l.debug("time {}: deferring a store of {} to addr {}".format(state.spec.ins_executed, describeAst(expr), describeAst(addr)))
         state.spec.stores.append((addr, expr, condition, endness, action, False))
+        # this is also hacky, but works for our purposes:
+        # SpectreExplicitState wants the inspect points on 'mem_write' to trigger _now_
+        #   even though we may or may not (semantically) be doing / have done the store now.
+        #   (Future loads will consider both the possibility that we have or have not done
+        #   this store, until it drops out of the speculation window.)
+        # The inspect point will trigger again when the store drops out of the speculation
+        #   window, and it's theoretically bad to trigger it twice, but doesn't do any harm
+        #   for our uses, so for now it's fine.
+        state._inspect('mem_write', BP_BEFORE,
+            mem_write_address=addr,
+            mem_write_length=state.arch.bits // 8,  # see notes below in LoadHook
+            mem_write_expr=expr,
+            mem_write_condition=condition
+        )
+        state._inspect('mem_write', BP_AFTER)  # angr/storage/memory.py passes only these arguments to the BP_AFTER point, so we do the same here for consistency
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
