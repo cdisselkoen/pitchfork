@@ -76,9 +76,10 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                     l_state.scratch.store_tmp(stmt.tmp, l_value, deps=data_deps)
 
                     if l_state is not state:
-                        target = stmt.addr + stmt.delta  # next instruction
+                        target = nextInstruction(state, stmt)
                         jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
-                        successors.add_successor(l_state, target, True, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
+                        guard = claripy.BVV(1, 1)  # boolean True
+                        successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
             # we've now completely handled this statement manually, we're done
             return True
 
@@ -160,6 +161,15 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                     successors.add_successor(l_state, target, True, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
         return True
+
+def nextInstruction(state, stmt):
+    # seems really inefficient; there's probably a better way
+    foundThisStmt = False
+    for s in state.scratch.irsb.statements:
+        if foundThisStmt and type(s) is pyvex.stmt.IMark:
+            return s.addr
+        if s is stmt:
+            foundThisStmt = True
 
 class SpecState(angr.SimStatePlugin):
     def __init__(self, spec_window_size, ins=0, conditionals=None, stores=None):
