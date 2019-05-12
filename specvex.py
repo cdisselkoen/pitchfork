@@ -1,7 +1,7 @@
 import angr
 import pyvex
 import claripy
-from angr.errors import SimReliftException, UnsupportedIRStmtError, SimStatementError
+from angr.errors import SimReliftException, UnsupportedIRStmtError, SimStatementError, SimUninitializedAccessError
 from angr.state_plugins.inspect import BP_AFTER, BP_BEFORE
 from angr.state_plugins.sim_action_object import SimActionObject
 from angr.state_plugins.sim_action import SimActionData
@@ -41,7 +41,47 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             if state.spec.mispredicted:
                 return False  # report path as deadended
 
-        # process it!
+        if type(stmt) == pyvex.IRStmt.WrTmp and type(stmt.data) == pyvex.IRExpr.Load:
+            # we duplicate the processing for this ourselves, because we potentially need to fork during load processing
+            load = stmt.data
+            with state.history.subscribe_actions() as data_deps:
+                state._inspect('expr', BP_BEFORE, expr=load)
+                load_size_bits = pyvex.const.get_type_size(load.type)
+                load_size_bytes = load_size_bits // state.arch.byte_width
+                with state.history.subscribe_actions() as addr_actions:
+                    addr = self.handle_expression(state, load.addr)
+                if angr.options.UNINITIALIZED_ACCESS_AWARENESS in state.options:
+                    if getattr(addr._model_vsa, 'uninitialized', False):
+                        raise SimUninitializedAccessError('addr', addr)
+                if angr.options.DO_LOADS not in state.options:
+                    results = (state, state.solver.Unconstrained("load_expr_%#x_%d" % (state.scratch.ins_addr, state.scratch.stmt_idx), load_size_bits))
+                else:
+                    results = performLoadWithPossibleForwarding(state, addr, load_size_bytes, load_endness=load.endness)
+
+                for (l_state, l_value) in results:
+                    if load.type.startswith('Ity_F'):
+                        l_value = l_value.raw_to_fp()
+                    if angr.options.TRACK_MEMORY_ACTIONS in l_state.options:
+                        addr_ao = SimActionObject(addr, deps=addr_actions, state=l_state)
+                        r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, size=load_size_bits, data=l_value)
+                        l_state.history.add_action(r)
+                    if angr.options.SIMPLIFY_EXPRS in l_state.options:
+                        l_value = state.solver.simplify(l_value)
+                    if l_state.solver.symbolic(l_value) and angr.options.CONCRETIZE in l_state.options:
+                        concrete_value = l_state.solver.BVV(l_state.solver.eval(l_value), len(l_value))
+                        l_state.add_constraints(l_value == concrete_value)
+                        l_value = concrete_value
+                    l_state._inspect('expr', BP_AFTER, expr=load, expr_result=l_value)
+                    l_state.scratch.store_tmp(stmt.tmp, l_value, deps=data_deps)
+
+                    if l_state is not state:
+                        target = stmt.addr + stmt.delta  # next instruction
+                        jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
+                        successors.add_successor(l_state, target, True, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
+            # we've now completely handled this statement manually, we're done
+            return True
+
+        # now for everything else
         try:
             stmt_handler = self.stmt_handlers[stmt.tag_int]
         except IndexError:
