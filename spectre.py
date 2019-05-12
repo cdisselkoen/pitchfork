@@ -344,29 +344,29 @@ def _can_point_to_secret(state, ast):
     return False  # ast cannot point to secret
 
 def detected_spectre_read(state):
-    print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Instruction Address {}\n  Read Address {}\n  Read Value {}\n  args were {}\n  constraints were {}\n".format(
+    print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Instruction Address {}\n  Read Address {}\n  Read Value {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
         hex(state.addr),
         describeAst(state.inspect.mem_read_address),
         describeAst(state.inspect.mem_read_expr),
-        state.globals['args'],
+        {name: state.solver.eval(bvs) for (name, (bvs, _)) in state.globals['args'].items()},
         state.solver.constraints))
     state.spectre.violation = ('read', state.addr, state.inspect.mem_read_address, state.inspect.mem_read_expr)
 
 def detected_spectre_write(state):
-    print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Instruction Address {}\n  Write Address {}\n  Write Value {}\n  args were {}\n  constraints were {}\n".format(
+    print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Instruction Address {}\n  Write Address {}\n  Write Value {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
         hex(state.addr),
         describeAst(state.inspect.mem_write_address),
         describeAst(state.inspect.mem_write_expr),
-        state.globals['args'],
+        {name: state.solver.eval(bvs) for (name, (bvs, _)) in state.globals['args'].items()},
         state.solver.constraints))
     state.spectre.violation = ('write', state.addr, state.inspect.mem_write_address, state.inspect.mem_write_expr)
 
 def detected_spectre_branch(state):
-    print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  args were {}\n  constraints were {}\n".format(
+    print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
         hex(state.addr),
         state.inspect.exit_target,
         describeAst(state.inspect.exit_guard),
-        state.globals['args'],
+        {name: state.solver.eval(bvs) for (name, (bvs, _)) in state.globals['args'].items()},
         state.solver.constraints))
     state.spectre.violation = ('branch', state.addr, state.inspect.exit_target, state.inspect.exit_guard)
 
