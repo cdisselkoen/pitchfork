@@ -426,12 +426,12 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
             l.warn("load could overlap with store misaligned, but we are only considering the aligned case")
             # we choose to only consider cases where they're exactly equal, so we add that constraint
             state.add_constraints(load_addr == s_addr)
-        if isDefinitelyNotEqual_Solver(state, load_size, s_size):
-            raise ValueError("not yet implemented: load overlaps with an inflight store but cannot be identical size")
-        elif not isDefinitelyNotEqual_Solver(state, load_size, s_size):
-            l.warn("load could have different size than store, but we are only considering the same-size case")
-            # we choose to only consider cases where they're exactly equal, so we add that constraint
-            state.add_constraints(load_size == s_size)
+        if state.solver.symbolic(load_size):
+            raise ValueError("not yet implemented: load overlaps with an inflight store but has symbolic size")
+        if state.solver.symbolic(s_size):
+            raise ValueError("not yet implemented: load overlaps with an inflight store, but store has symbolic size")
+        if load_size > s_size:
+            raise ValueError("not yet implemented: load overlaps with an inflight store but is larger than the store")
 
         # fork a new state, that will forward from this inflight store
         forwarding_state = correct_state.copy()  # note that nothing is poisoned in correct_state yet
@@ -441,7 +441,7 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
         # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
         correct_state = forwarding_state
         # we are a valid state, and this is the value we think the load has
-        returnPairs.append((forwarding_state, s_value))
+        returnPairs.append((forwarding_state, alignedLoadFromStoredValue(load_size, s_value, s_size, load_endness, s_endness)))
     l.debug("- final returnPairs: {}".format(returnPairs))
     return returnPairs
 
@@ -461,3 +461,15 @@ def overlaps(addrA, sizeInBytesA, addrB, sizeInBytesB):
 def poison(store):
     (addr, value, cond, endness, action, _) = store
     return (addr, value, cond, endness, action, True)
+
+def alignedLoadFromStoredValue(load_size, stored_value, stored_size, load_endness, store_endness):
+    """
+    Return the correct data when loading from the given stored_value, when sizes may be different.
+    Assumes the load and store were to the _same address_.
+    Also assumes load_size <= stored_size (otherwise we don't have all the data needed).
+    """
+    if load_endness != store_endness:
+        raise ValueError("not implemented yet: load and store have different endianness")
+    if load_size == stored_size: return stored_value
+    # I believe this aligns with the angr convention
+    return stored_value[0:load_size*8]
