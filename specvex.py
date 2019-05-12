@@ -190,24 +190,29 @@ def nextInstruction(state, stmt):
             foundThisStmt = True
 
 class SpecState(angr.SimStatePlugin):
-    def __init__(self, spec_window_size, ins=0, conditionals=None, stores=None):
+    """
+    Members:
+    _spec_window_size: speculative window size. Maximum number of x86
+        instructions we can go past a misprediction point.
+    ins_executed: number of x86 instructions executed since start
+    conditionals: a data structure where we track inflight conditionals
+        (predictions we've made). A SpecQueue where thing = conditional guard
+    stores: a data structure where we track inflight stores.
+        A SpecQueue where thing = (addr, value, cond, endness, action, poisoned)
+        poisoned is a bool, if True then this store will cause rollback (cause this
+        state to abort) when it retires. When we mis-forward from a store or from
+        memory, we set the poisoned bit on the _next_ store to that address, because
+        that's the latest time we could realize we were wrong.
+        As of this writing, this all relies on modifications to angr itself,
+        particularly for the forwarding.
+    hook_loads: controls whether load hooks are active
+    mispredicted: indicates whether a misprediction error has been encountered
+    """
+
+    def __init__(self, spec_window_size, ins=0, conditionals=None, stores=None, hook_loads=False, mispredicted=False):
         """
-        Members:
-        _spec_window_size: speculative window size. Maximum number of x86
-            instructions we can go past a misprediction point.
-        ins_executed: number of x86 instructions executed since start
-        conditionals: a data structure where we track inflight conditionals
-            (predictions we've made). A SpecQueue where thing = conditional guard
-        stores: a data structure where we track inflight stores.
-            A SpecQueue where thing = (addr, value, cond, endness, action, poisoned)
-            poisoned is a bool, if True then this store will cause rollback (cause this
-            state to abort) when it retires. When we mis-forward from a store or from
-            memory, we set the poisoned bit on the _next_ store to that address, because
-            that's the latest time we could realize we were wrong.
-            As of this writing, this all relies on modifications to angr itself,
-            particularly for the forwarding.
-        hook_loads: controls whether load hooks are active
-        mispredicted: indicates whether a misprediction error has been encountered
+        All arguments other than spec_window_size should be left default unless
+            you're the copy constructor
         """
         super().__init__()
         self._spec_window_size = spec_window_size
@@ -220,15 +225,15 @@ class SpecState(angr.SimStatePlugin):
             self.stores = stores
         else:
             self.stores = SpecQueue(ins)
-        self.hook_loads = False
-        self.mispredicted = False
+        self.hook_loads = hook_loads
+        self.mispredicted = mispredicted
 
     def arm(self, state, misforwarding=False):
         state.inspect.b('instruction', when=BP_BEFORE, action=tickSpecState)
         state.inspect.b('statement', when=BP_BEFORE, action=handleFences)
         if misforwarding:
             state.register_plugin('store_hook', StoreHook())
-            state.hook_loads = True
+            self.hook_loads = True
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
@@ -236,7 +241,9 @@ class SpecState(angr.SimStatePlugin):
             spec_window_size=self._spec_window_size,
             ins=self.ins_executed,
             conditionals=self.conditionals.copy(),
-            stores=self.stores.copy()
+            stores=self.stores.copy(),
+            hook_loads=self.hook_loads,
+            mispredicted=self.mispredicted
         )
 
     def tick(self):
