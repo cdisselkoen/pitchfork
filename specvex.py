@@ -421,8 +421,6 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_en
             # it is impossible for the load to overlap this store
             continue
 
-        if load_endness != s_endness:
-            raise ValueError("not yet implemented: load and store differ in endness")
         if s_cond is not None and correct_state.solver.satisfiable(extra_constraints=[claripy.Not(s_cond)]):
             raise ValueError("not yet implemented: conditional store where condition could be False")
         if correct_state.solver.symbolic(load_size_bytes):
@@ -499,7 +497,7 @@ def alignedLoadFromStoredValue(load_size_bytes, stored_value, stored_size_bytes,
     Also assumes load_size <= stored_size (otherwise we don't have all the data needed).
     """
     if load_endness != store_endness:
-        raise ValueError("not implemented yet: load and store have different endianness")
+        raise ValueError("not yet implemented: load and store have different endianness")
     if len(stored_value) != stored_size_bytes * 8:
         raise ValueError("expected stored_value to be size {} bytes, got size {} bits".format(stored_size_bytes, len(stored_value)))
     if load_size_bytes == stored_size_bytes: return stored_value
