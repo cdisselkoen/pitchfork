@@ -294,8 +294,13 @@ class LoadHook(angr.SimStatePlugin):
     (requires our fork of angr to actually respect the hook)
     """
     def do_load(self, state, addr, read_size, endness, condition):
-        forwarding_sources = []
-        for (storenum, (s_addr, _, s_cond, s_endness, _, _)) in enumerate(state.spec.stores.getAllOldestFirst()):
+        # we will return a list of pairs (state, read_expr), knowing that thanks to our hack our modified engine will get to handle them
+        returnPairs = []
+        # one valid option is to read from memory, ignoring all inflight stores (not forwarding)
+        returnPairs.append(state, state.memory.load(addr, read_size, endness=endness, condition=condition))
+        # 'correct_state' will be continuously updated, but it always stores our current idea of which state has the 'correct' (not mis-speculated) load value
+        correct_state = state
+        for (storenum, (s_addr, s_value, s_cond, s_endness, _, _)) in enumerate(state.spec.stores.getAllOldestFirst()):
             s_size = state.arch.bits // 8 # my read of angr/storage/memory.py (SimMemory.store()) shows that all stores are size state.arch.bits (in bits), since when VEX processes store statements it never passes an explicit size to SimMemory.store()?
             if not overlaps(addr, read_size, s_addr, s_size): continue
             if addr != s_addr or read_size != s_size:
@@ -304,17 +309,15 @@ class LoadHook(angr.SimStatePlugin):
                 raise ValueError("not yet implemented: load and store differ in endness")
             if s_cond is not None and not s_cond.is_true():
                 raise ValueError("not yet implemented: conditional store")
-            forwarding_sources.append(storenum)
-        # we return a list of pairs (state, read_expr), knowing that thanks to our hack our modified engine will get to handle them
-        returnPairs = []
-        forwarding_states = [state.copy() for _ in forwarding_sources]
-        for i in range(len(forwarding_states)):
-            (_, value, _, _, _, _) = state.spec.stores.getAt([forwarding_sources[i]])
-            if i != len(forwarding_states) - 1: forwarding_states[i].spec.stores.updateAt(forwarding_sources[i+1], poison)
-            returnPairs.append((forwarding_states[i], value))
-        # now handle the state that reads directly from memory, ignoring any possible forwarding
-        if forwarding_states: state.spec.stores.updateAt(forwarding_sources[0], poison)
-        returnPairs.append((state, state.memory.load(addr, read_size, endness=endness, condition=condition)))
+
+            # fork a new state, that will forward from this inflight store
+            forwarding_state = state.copy()
+            # the previous 'correct' state must discover that it's incorrect when this store retires, at the latest
+            correct_state.spec.stores.updateAt(storenum, poison)
+            # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
+            correct_state = forwarding_state
+            # we are a valid state, and this is the value we think the load has
+            returnPairs.append(forwarding_state, s_value)
         return returnPairs
 
     @angr.SimStatePlugin.memo
