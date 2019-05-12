@@ -309,7 +309,7 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
     """
     returnPairs = []
     # one valid option is to read from memory, ignoring all inflight stores (not forwarding)
-    returnPairs.append(state, state.memory.load(load_addr, load_size, endness=load_endness))
+    returnPairs.append((state, state.memory.load(load_addr, load_size, endness=load_endness)))
     # 'correct_state' will be continuously updated, but it always stores our current idea of which state has the 'correct' (not mis-speculated) load value
     correct_state = state
     for (storenum, (s_addr, s_value, s_cond, s_endness, _, _)) in enumerate(state.spec.stores.getAllOldestFirst()):
@@ -329,7 +329,7 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
         # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
         correct_state = forwarding_state
         # we are a valid state, and this is the value we think the load has
-        returnPairs.append(forwarding_state, s_value)
+        returnPairs.append((forwarding_state, s_value))
     return returnPairs
 
 def overlaps(addrA, sizeInBytesA, addrB, sizeInBytesB):
