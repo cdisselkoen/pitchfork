@@ -604,6 +604,7 @@ def alltests(kocher=True, forwarding=True, tweetnacl=True):
     forwarding: whether to run forwarding tests
     tweetnacl: whether to run TweetNaCl tests
     """
+    from pprint import pprint
     if not kocher and not forwarding and not tweetnacl:
         raise ValueError("no tests specified")
     logging.getLogger('specvex').setLevel(logging.WARNING)
@@ -639,21 +640,20 @@ def alltests(kocher=True, forwarding=True, tweetnacl=True):
     tweetnacl_results = {k:tweetnacl_testResult(k) for k in tweetnacl_spec.keys()} if tweetnacl else None
     if kocher and not forwarding and not tweetnacl:
         print("Kocher tests:")
-        return kocher_results
+        pprint(kocher_results)
     elif forwarding and not kocher and not tweetnacl:
         print("Forwarding tests:")
-        return forwarding_results
+        pprint(forwarding_results)
     elif tweetnacl and not kocher and not forwarding:
         print("TweetNaCl tests:")
-        return tweetnacl_results
+        pprint(tweetnacl_results)
     else:
-        return {"Kocher tests":kocher_results,
+        pprint({"Kocher tests":kocher_results,
                 "Forwarding tests":forwarding_results,
-                "TweetNaCl tests":tweetnacl_results}
+                "TweetNaCl tests":tweetnacl_results})
 
 def unionDicts(dicta, dictb):
     return {**dicta, **dictb}  # requires Python 3.5+
 
 if __name__ == '__main__':
-    from pprint import pprint
-    pprint(alltests(tweetnacl=False))
+    alltests(tweetnacl=False)
