@@ -425,6 +425,14 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_en
             raise ValueError("not yet implemented: load and store differ in endness")
         if s_cond is not None and correct_state.solver.satisfiable(extra_constraints=[claripy.Not(s_cond)]):
             raise ValueError("not yet implemented: conditional store where condition could be False")
+        if correct_state.solver.symbolic(load_size_bytes):
+            raise ValueError("not yet implemented: load could overlap with an inflight store but has symbolic size")
+        if correct_state.solver.symbolic(s_size_bytes):
+            raise ValueError("not yet implemented: load could overlap with an inflight store, but store has symbolic size")
+        if load_size_bytes > s_size_bytes:
+            l.warn("load could overlap with an inflight store, but load is larger. We are only considering the case where they do not overlap. This will miss some possible speculative paths.")
+            for (s, _) in returnPairs: s.add_constraints(claripy.Not(loadOverlapsStore))
+            continue
 
         # if we got here, the load may overlap the store, but doesn't necessarily have to
         if correct_state.solver.satisfiable(extra_constraints=[claripy.Not(loadOverlapsStore)]):
@@ -454,12 +462,6 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_en
             l.warn("load could overlap with store misaligned, but we are only considering the aligned case")
             # we choose to only consider cases where they're exactly equal, so we add that constraint
             correct_state.add_constraints(load_addr == s_addr)
-        if correct_state.solver.symbolic(load_size_bytes):
-            raise ValueError("not yet implemented: load overlaps with an inflight store but has symbolic size")
-        if correct_state.solver.symbolic(s_size_bytes):
-            raise ValueError("not yet implemented: load overlaps with an inflight store, but store has symbolic size")
-        if load_size_bytes > s_size_bytes:
-            raise ValueError("not yet implemented: load overlaps with an inflight store but is larger than the store (load size {} bytes at {}, store size {} bytes at {})".format(load_size_bytes, describeAst(load_addr), s_size_bytes, describeAst(s_addr)))
 
         # fork a new state, that will forward from this inflight store
         forwarding_state = correct_state.copy()  # note that nothing is poisoned in correct_state yet
