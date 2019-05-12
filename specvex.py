@@ -254,6 +254,15 @@ class SpecState(angr.SimStatePlugin):
         self.conditionals.tick()
         self.stores.tick()
 
+    def isPoisoned(self):
+        """
+        whether this state has speculatively misforwarded store-to-load (and thus will die)
+        """
+        def isEntryPoisoned(entry):
+            (_, _, _, _, _, poisoned) = entry
+            return poisoned
+        return any(isEntryPoisoned(e) for e in self.stores.getAllOldestFirst())
+
 class SpecQueue:
     """
     holds "things" which are currently in-flight/unresolved
