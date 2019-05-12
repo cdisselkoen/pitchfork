@@ -8,9 +8,10 @@ from angr.state_plugins.sim_action import SimActionData
 from angr.engines import vex
 
 import collections
-
 import logging
 l = logging.getLogger(name=__name__)
+
+from utils import isDefinitelyEqual_Solver, isDefinitelyNotEqual_Solver, describeAst
 
 class SimEngineSpecVEX(angr.SimEngineVEX):
     """
@@ -151,9 +152,11 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                     r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, data=data_ao, condition=guard_ao, size=size_ao, fallback=alt_ao)
                     l_state.history.add_action(r)
 
+                # now we tell angr about the fork, so it continues executing the state
                 if l_state is not state:
                     target = stmt.addr + stmt.delta  # next instruction
                     jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
+                    l.debug("time {}: forking for misforwarding".format(state.spec.ins_executed))
                     successors.add_successor(l_state, target, True, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
         return True
@@ -370,35 +373,89 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
     """
     returns: list of pairs (state, load_value)
     """
+    l.debug("time {}: handling load of addr {}".format(state.spec.ins_executed, load_addr))
     returnPairs = []
     # one valid option is to read from memory, ignoring all inflight stores (not forwarding)
-    returnPairs.append((state, state.memory.load(load_addr, load_size, endness=load_endness)))
+    memory_value = state.memory.load(load_addr, load_size, endness=load_endness)
+    returnPairs.append((state, memory_value))
     # 'correct_state' will be continuously updated, but it always stores our current idea of which state has the 'correct' (not mis-speculated) load value
     correct_state = state
-    for (storenum, (s_addr, s_value, s_cond, s_endness, _, _)) in enumerate(state.spec.stores.getAllOldestFirst()):
+    correct_value = memory_value
+    # explained later
+    notOverlapStates = []
+    stores = list(enumerate(state.spec.stores.getAllOldestFirst()))  # collect them into a list once right away, so then we aren't worrying about iterating over state.spec.stores while modifying it
+    for (storenum, (s_addr, s_value, s_cond, s_endness, _, _)) in stores:
+        l.debug(" - checking whether it could alias with store of {} to {}".format(describeAst(s_value), describeAst(s_addr)))
         s_size = state.arch.bits // 8 # my read of angr/storage/memory.py (SimMemory.store()) shows that all stores are size state.arch.bits (in bits), since when VEX processes store statements it never passes an explicit size to SimMemory.store()?
-        if not overlaps(load_addr, load_size, s_addr, s_size): continue
-        if load_addr != s_addr or load_size != s_size:
-            raise ValueError("not yet implemented: load overlaps with an inflight store but is not to identical address/size")
+        loadOverlapsStore = overlaps(load_addr, load_size, s_addr, s_size)
+        if not state.solver.satisfiable(extra_constraints=[loadOverlapsStore]):
+            # it is impossible for the load to overlap this store
+            continue
+
         if load_endness != s_endness:
             raise ValueError("not yet implemented: load and store differ in endness")
-        if s_cond is not None and not s_cond.is_true():
-            raise ValueError("not yet implemented: conditional store")
+        if s_cond is not None and state.solver.satisfiable(extra_constraints=[claripy.Not(s_cond)]):
+            raise ValueError("not yet implemented: conditional store where condition could be False")
+
+        # if we got here, the load may overlap the store, but doesn't necessarily have to
+        if state.solver.satisfiable(extra_constraints=[claripy.Not(loadOverlapsStore)]):
+            # in this case, it's possible both that the load either does or does not overlap the store
+            # We create a notOverlapState, for which forwarding from the previous store was _actually correct_
+            #   (it will not alias with this store or any newer inflight stores)
+            # (We could also consider the possibility that the load not-aliases with this
+            #   store and does-alias with a newer inflight store, but that would lead to a
+            #   lot more blowup and it's unclear it would be useful. We're approximating
+            #   elsewhere anyway, e.g. concretization)
+            notOverlapState = correct_state.copy()
+            notOverlapStates.append(notOverlapState)
+            returnPairs.append((notOverlapState, correct_value))  # it reads the previous correct value
+            # on the other hand, the other states are going to assume the load and store alias, so we should constrain that
+            # (we add this before the fork that will happen below, because both of the forked states assume that the aliasing happens)
+            correct_state.add_constraints(loadOverlapsStore)
+
+        for s in notOverlapStates:
+            # all of these states got their _correct values_ already, so they cannot alias with this store
+            s.add_constraints(claripy.Not(loadOverlapsStore))
+
+        # now we're left with the case where the load does overlap the store
+
+        if isDefinitelyNotEqual_Solver(correct_state, load_addr, s_addr):
+            raise ValueError("not yet implemented: load overlaps with an inflight store but cannot be identical address")
+        elif not isDefinitelyEqual_Solver(correct_state, load_addr, s_addr):
+            l.warn("load could overlap with store misaligned, but we are only considering the aligned case")
+            # we choose to only consider cases where they're exactly equal, so we add that constraint
+            state.add_constraints(load_addr == s_addr)
+        if isDefinitelyNotEqual_Solver(state, load_size, s_size):
+            raise ValueError("not yet implemented: load overlaps with an inflight store but cannot be identical size")
+        elif not isDefinitelyNotEqual_Solver(state, load_size, s_size):
+            l.warn("load could have different size than store, but we are only considering the same-size case")
+            # we choose to only consider cases where they're exactly equal, so we add that constraint
+            state.add_constraints(load_size == s_size)
 
         # fork a new state, that will forward from this inflight store
-        forwarding_state = correct_state.copy()  # we use correct_state because nothing is poisoned there yet
+        forwarding_state = correct_state.copy()  # note that nothing is poisoned in correct_state yet
         # the previous 'correct' state must discover that it's incorrect when this store retires, at the latest
+        #   (since it _definitely does_ alias with this store -- either that was already the case, or we constrained it to be so)
         correct_state.spec.stores.updateAt(storenum, poison)
         # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
         correct_state = forwarding_state
         # we are a valid state, and this is the value we think the load has
         returnPairs.append((forwarding_state, s_value))
+    l.debug("- final returnPairs: {}".format(returnPairs))
     return returnPairs
 
 def overlaps(addrA, sizeInBytesA, addrB, sizeInBytesB):
-    if addrA + sizeInBytesA <= addrB: return False
-    if addrA > addrB + sizeInBytesB: return False
-    return True
+    """
+    Returns a symbolic constraint representing the two intervals overlapping.
+    If this constraint is simply True, then the intervals must overlap; if it is False, they cannot;
+        and if it is some symbolic expression that may take either value, that expression encodes the
+        condition under which they overlap.
+    """
+    a_left = addrA
+    a_right = addrA + sizeInBytesA
+    b_left = addrB
+    b_right = addrB + sizeInBytesB
+    return claripy.And(a_right > b_left, a_left < b_right)
 
 def poison(store):
     (addr, value, cond, endness, action, _) = store

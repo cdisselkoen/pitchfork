@@ -14,6 +14,53 @@ def describeAst(ast, checkTaint=True):
             else "{} (untainted, but with annotations {})".format(ast, ast.annotations) if hasattr(ast, 'annotations') and ast.annotations \
             else "{} (untainted)".format(ast)
 
+def isDefinitelyEqual(a,b):
+    """
+    Does 'a' definitely equal 'b', i.e., is it impossible for them to be not equal.
+
+    this implementation is pretty conservative, and errs on the side of returning False.
+        (it will never mistakenly return True, but may mistakenly return False)
+    To be less conservative, use isDefinitelyEqual_Solver() (below)
+    """
+    if isinstance(a, int) and isinstance(b, int): return a == b
+    if isAst(a) or isAst(b): return (a == b).is_true()
+    raise ValueError("not sure what to do about {} and {} with types {} and {}".format(a,b,type(a),type(b)))
+
+def isDefinitelyEqual_Solver(state, a, b):
+    """
+    Does 'a' definitely equal 'b', i.e., is it impossible for them to be not equal.
+
+    More expensive than isDefinitelyEqual() (above), because it takes into account the
+        current context.
+    May catch some cases where 'a' definitely equals 'b' in the current context but
+        isDefinitelyEqual() returned False.
+    """
+    if isinstance(a, int) and isinstance(b, int): return a == b
+    return not state.solver.satisfiable(extra_constraints=[a != b])
+
+def isDefinitelyNotEqual(a,b):
+    """
+    Does 'a' definitely not equal 'b', i.e., is it impossible for them to be equal.
+
+    this implementation is pretty conservative, and errs on the side of returning False.
+        (it will never mistakenly return True, but may mistakenly return False)
+    To be less conservative, use isDefinitelyNotEqual_Solver() (below)
+    """
+    if isinstance(a, int) and isinstance(b, int): return a != b
+    if isAst(a) or isAst(b): return (a != b).is_true()
+    raise ValueError("not sure what to do about {} and {} with types {} and {}".format(a,b,type(a),type(b)))
+
+def isDefinitelyNotEqual_Solver(state, a, b):
+    """
+    Does 'a' definitely not equal 'b', i.e., is it impossible for them to be equal.
+
+    More expensive than isDefinitelyNotEqual() (above), because it takes into account
+        the current context.
+    May catch some cases where 'a' definitely does not equal 'b' in the current context
+        but isDefinitelyNotEqual() returned False.
+    """
+    if isinstance(a, int) and isinstance(b, int): return a != b
+    return not state.solver.satisfiable(extra_constraints=[a == b])
 
 def showbbASM(proj, bbaddr, file=stdout):
     """

@@ -302,11 +302,6 @@ def normalizeIntervals(intervals):
         newIntervals.append(interval)
     return newIntervals
 
-def isDefinitelyEqual(a,b):
-    if isinstance(a, int) and isinstance(b, int): return a == b
-    if isAst(a) or isAst(b): return (a == b).is_true()
-    raise ValueError("not sure what to do about {} and {} with types {} and {}".format(a,b,type(a),type(b)))
-
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
     addr = state.inspect.mem_read_address
