@@ -311,7 +311,7 @@ class LoadHook(angr.SimStatePlugin):
                 raise ValueError("not yet implemented: conditional store")
 
             # fork a new state, that will forward from this inflight store
-            forwarding_state = state.copy()
+            forwarding_state = correct_state.copy()  # we use correct_state because nothing is poisoned there yet
             # the previous 'correct' state must discover that it's incorrect when this store retires, at the latest
             correct_state.spec.stores.updateAt(storenum, poison)
             # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
