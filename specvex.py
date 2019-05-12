@@ -294,35 +294,43 @@ class LoadHook(angr.SimStatePlugin):
     (requires our fork of angr to actually respect the hook)
     """
     def do_load(self, state, addr, read_size, endness, condition):
-        # we will return a list of pairs (state, read_expr), knowing that thanks to our hack our modified engine will get to handle them
-        returnPairs = []
-        # one valid option is to read from memory, ignoring all inflight stores (not forwarding)
-        returnPairs.append(state, state.memory.load(addr, read_size, endness=endness, condition=condition))
-        # 'correct_state' will be continuously updated, but it always stores our current idea of which state has the 'correct' (not mis-speculated) load value
-        correct_state = state
-        for (storenum, (s_addr, s_value, s_cond, s_endness, _, _)) in enumerate(state.spec.stores.getAllOldestFirst()):
-            s_size = state.arch.bits // 8 # my read of angr/storage/memory.py (SimMemory.store()) shows that all stores are size state.arch.bits (in bits), since when VEX processes store statements it never passes an explicit size to SimMemory.store()?
-            if not overlaps(addr, read_size, s_addr, s_size): continue
-            if addr != s_addr or read_size != s_size:
-                raise ValueError("not yet implemented: load overlaps with an inflight store but is not to identical address/size")
-            if endness != s_endness:
-                raise ValueError("not yet implemented: load and store differ in endness")
-            if s_cond is not None and not s_cond.is_true():
-                raise ValueError("not yet implemented: conditional store")
-
-            # fork a new state, that will forward from this inflight store
-            forwarding_state = correct_state.copy()  # we use correct_state because nothing is poisoned there yet
-            # the previous 'correct' state must discover that it's incorrect when this store retires, at the latest
-            correct_state.spec.stores.updateAt(storenum, poison)
-            # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
-            correct_state = forwarding_state
-            # we are a valid state, and this is the value we think the load has
-            returnPairs.append(forwarding_state, s_value)
-        return returnPairs
+        if condition is not None and state.solver.satisfiable(extra_constraints=[claripy.Not(condition)]):
+            raise ValueError("not yet implemented: conditional load with condition that could be false")
+        # we directly return pairs (state, load_value), knowing that thanks to our hack our modified engine will get to handle them
+        return performLoadWithPossibleForwarding(state, addr, read_size, endness)
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
         return LoadHook()
+
+def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness):
+    """
+    returns: list of pairs (state, load_value)
+    """
+    returnPairs = []
+    # one valid option is to read from memory, ignoring all inflight stores (not forwarding)
+    returnPairs.append(state, state.memory.load(load_addr, load_size, endness=load_endness))
+    # 'correct_state' will be continuously updated, but it always stores our current idea of which state has the 'correct' (not mis-speculated) load value
+    correct_state = state
+    for (storenum, (s_addr, s_value, s_cond, s_endness, _, _)) in enumerate(state.spec.stores.getAllOldestFirst()):
+        s_size = state.arch.bits // 8 # my read of angr/storage/memory.py (SimMemory.store()) shows that all stores are size state.arch.bits (in bits), since when VEX processes store statements it never passes an explicit size to SimMemory.store()?
+        if not overlaps(load_addr, load_size, s_addr, s_size): continue
+        if load_addr != s_addr or load_size != s_size:
+            raise ValueError("not yet implemented: load overlaps with an inflight store but is not to identical address/size")
+        if load_endness != s_endness:
+            raise ValueError("not yet implemented: load and store differ in endness")
+        if s_cond is not None and not s_cond.is_true():
+            raise ValueError("not yet implemented: conditional store")
+
+        # fork a new state, that will forward from this inflight store
+        forwarding_state = correct_state.copy()  # we use correct_state because nothing is poisoned there yet
+        # the previous 'correct' state must discover that it's incorrect when this store retires, at the latest
+        correct_state.spec.stores.updateAt(storenum, poison)
+        # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
+        correct_state = forwarding_state
+        # we are a valid state, and this is the value we think the load has
+        returnPairs.append(forwarding_state, s_value)
+    return returnPairs
 
 def overlaps(addrA, sizeInBytesA, addrB, sizeInBytesB):
     if addrA + sizeInBytesA <= addrB: return False
