@@ -80,7 +80,7 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                         target = nextInstruction(state, stmt)
                         jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
                         guard = claripy.BVV(1, 1)  # boolean True
-                        l.debug("time {}: forking for misforwarding".format(state.spec.ins_executed))
+                        l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
                         successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
             # we've now completely handled this statement manually, we're done
@@ -129,7 +129,7 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                     target = nextInstruction(state, stmt)
                     jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
                     guard = claripy.BVV(1, 1)  # boolean True
-                    l.debug("time {}: forking for misforwarding".format(state.spec.ins_executed))
+                    l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
                     successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
             # we've now completely handled this statement manually, we're done
@@ -465,7 +465,8 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_en
         correct_state = forwarding_state
         # we are a valid state, and this is the value we think the load has
         returnPairs.append((forwarding_state, alignedLoadFromStoredValue(load_size_bytes, s_value, s_size_bytes, load_endness, s_endness)))
-    l.debug("  - final returnPairs: {}".format(returnPairs))
+    if len(returnPairs) == 1: l.debug("  - final results: only one possible value, {}".format(returnPairs[0][1]))
+    else: l.debug("  – final results: {} possible values: {}".format(len(returnPairs), list(v for (_, v) in returnPairs)))
     return returnPairs
 
 def overlaps(addrA, sizeInBytesA, addrB, sizeInBytesB):
