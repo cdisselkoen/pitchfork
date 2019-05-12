@@ -370,14 +370,14 @@ class LoadHook(angr.SimStatePlugin):
     def copy(self, memo):
         return LoadHook()
 
-def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness):
+def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_endness):
     """
     returns: list of pairs (state, load_value)
     """
     l.debug("time {}: handling load of addr {}".format(state.spec.ins_executed, load_addr))
     returnPairs = []
     # one valid option is to read from memory, ignoring all inflight stores (not forwarding)
-    memory_value = state.memory.load(load_addr, load_size, endness=load_endness)
+    memory_value = state.memory.load(load_addr, load_size_bytes, endness=load_endness)
     returnPairs.append((state, memory_value))
     # 'correct_state' will be continuously updated, but it always stores our current idea of which state has the 'correct' (not mis-speculated) load value
     correct_state = state
@@ -386,20 +386,20 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
     notOverlapStates = []
     stores = list(enumerate(state.spec.stores.getAllOldestFirst()))  # collect them into a list once right away, so then we aren't worrying about iterating over state.spec.stores while modifying it
     for (storenum, (s_addr, s_value, s_cond, s_endness, _, _)) in stores:
-        l.debug(" - checking whether it could alias with store of {} to {}".format(describeAst(s_value), describeAst(s_addr)))
+        l.debug("  - checking whether it could alias with store of {} to {}".format(describeAst(s_value), describeAst(s_addr)))
         s_size = state.arch.bits // 8 # my read of angr/storage/memory.py (SimMemory.store()) shows that all stores are size state.arch.bits (in bits), since when VEX processes store statements it never passes an explicit size to SimMemory.store()?
-        loadOverlapsStore = overlaps(load_addr, load_size, s_addr, s_size)
-        if not state.solver.satisfiable(extra_constraints=[loadOverlapsStore]):
+        loadOverlapsStore = overlaps(load_addr, load_size_bytes, s_addr, s_size)
+        if not correct_state.solver.satisfiable(extra_constraints=[loadOverlapsStore]):
             # it is impossible for the load to overlap this store
             continue
 
         if load_endness != s_endness:
             raise ValueError("not yet implemented: load and store differ in endness")
-        if s_cond is not None and state.solver.satisfiable(extra_constraints=[claripy.Not(s_cond)]):
+        if s_cond is not None and correct_state.solver.satisfiable(extra_constraints=[claripy.Not(s_cond)]):
             raise ValueError("not yet implemented: conditional store where condition could be False")
 
         # if we got here, the load may overlap the store, but doesn't necessarily have to
-        if state.solver.satisfiable(extra_constraints=[claripy.Not(loadOverlapsStore)]):
+        if correct_state.solver.satisfiable(extra_constraints=[claripy.Not(loadOverlapsStore)]):
             # in this case, it's possible both that the load either does or does not overlap the store
             # We create a notOverlapState, for which forwarding from the previous store was _actually correct_
             #   (it will not alias with this store or any newer inflight stores)
@@ -425,12 +425,12 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
         elif not isDefinitelyEqual_Solver(correct_state, load_addr, s_addr):
             l.warn("load could overlap with store misaligned, but we are only considering the aligned case")
             # we choose to only consider cases where they're exactly equal, so we add that constraint
-            state.add_constraints(load_addr == s_addr)
-        if state.solver.symbolic(load_size):
+            correct_state.add_constraints(load_addr == s_addr)
+        if correct_state.solver.symbolic(load_size_bytes):
             raise ValueError("not yet implemented: load overlaps with an inflight store but has symbolic size")
-        if state.solver.symbolic(s_size):
+        if correct_state.solver.symbolic(s_size):
             raise ValueError("not yet implemented: load overlaps with an inflight store, but store has symbolic size")
-        if load_size > s_size:
+        if load_size_bytes > s_size:
             raise ValueError("not yet implemented: load overlaps with an inflight store but is larger than the store")
 
         # fork a new state, that will forward from this inflight store
@@ -441,8 +441,8 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size, load_endness)
         # we are now the 'correct' state, to our knowledge -- we have the most recently stored value to this address
         correct_state = forwarding_state
         # we are a valid state, and this is the value we think the load has
-        returnPairs.append((forwarding_state, alignedLoadFromStoredValue(load_size, s_value, s_size, load_endness, s_endness)))
-    l.debug("- final returnPairs: {}".format(returnPairs))
+        returnPairs.append((forwarding_state, alignedLoadFromStoredValue(load_size_bytes, s_value, s_size, load_endness, s_endness)))
+    l.debug("  - final returnPairs: {}".format(returnPairs))
     return returnPairs
 
 def overlaps(addrA, sizeInBytesA, addrB, sizeInBytesB):
@@ -462,7 +462,7 @@ def poison(store):
     (addr, value, cond, endness, action, _) = store
     return (addr, value, cond, endness, action, True)
 
-def alignedLoadFromStoredValue(load_size, stored_value, stored_size, load_endness, store_endness):
+def alignedLoadFromStoredValue(load_size_bytes, stored_value, stored_size, load_endness, store_endness):
     """
     Return the correct data when loading from the given stored_value, when sizes may be different.
     Assumes the load and store were to the _same address_.
@@ -470,6 +470,13 @@ def alignedLoadFromStoredValue(load_size, stored_value, stored_size, load_endnes
     """
     if load_endness != store_endness:
         raise ValueError("not implemented yet: load and store have different endianness")
-    if load_size == stored_size: return stored_value
-    # I believe this aligns with the angr convention
-    return stored_value[0:load_size*8]
+    if len(stored_value) != stored_size:
+        raise ValueError("expected stored_value to be size {}, got size {}".format(stored_size, len(stored_value)))
+    if load_size_bytes == stored_size: return stored_value
+
+    # This is mostly a guess at what the correct way to do this is
+    # Note many things interacting here: endianness of the load, endianness of the store,
+    #   the fact that angr reverses bitvectors on loads and stores depending on endianness,
+    #   the comment on claripy.ast.bv.BV that for an AST 'a', a[31] is the LEFT-most (or most-significant) bit,
+    #   the fact that the first argument to get_bytes() is always in big-endian order regardless of system endianness...
+    return stored_value.get_bytes(0, load_size_bytes)
