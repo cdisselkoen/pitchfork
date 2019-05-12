@@ -42,7 +42,7 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             if state.spec.mispredicted:
                 return False  # report path as deadended
 
-        if type(stmt) == pyvex.IRStmt.WrTmp and type(stmt.data) == pyvex.IRExpr.Load:
+        if state.spec.hook_loads and type(stmt) == pyvex.IRStmt.WrTmp and type(stmt.data) == pyvex.IRExpr.Load:
             # we duplicate the processing for this ourselves, because we potentially need to fork during load processing
             load = stmt.data
             with state.history.subscribe_actions() as data_deps:
@@ -86,7 +86,7 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             # we've now completely handled this statement manually, we're done
             return True
 
-        if type(stmt) == pyvex.IRStmt.LoadG:
+        if state.spec.hook_loads and type(stmt) == pyvex.IRStmt.LoadG:
             # we also duplicate the processing for this ourselves, because we potentially need to fork during load processing
             with state.history.subscribe_actions() as addr_deps:
                 addr = self.handle_expression(state, stmt.addr)
@@ -206,6 +206,8 @@ class SpecState(angr.SimStatePlugin):
             that's the latest time we could realize we were wrong.
             As of this writing, this all relies on modifications to angr itself,
             particularly for the forwarding.
+        hook_loads: controls whether load hooks are active
+        mispredicted: indicates whether a misprediction error has been encountered
         """
         super().__init__()
         self._spec_window_size = spec_window_size
@@ -218,6 +220,7 @@ class SpecState(angr.SimStatePlugin):
             self.stores = stores
         else:
             self.stores = SpecQueue(ins)
+        self.hook_loads = False
         self.mispredicted = False
 
     def arm(self, state, misforwarding=False):
@@ -225,7 +228,7 @@ class SpecState(angr.SimStatePlugin):
         state.inspect.b('statement', when=BP_BEFORE, action=handleFences)
         if misforwarding:
             state.register_plugin('store_hook', StoreHook())
-            state.register_plugin('load_hook', LoadHook())
+            state.hook_loads = True
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
@@ -382,21 +385,6 @@ class StoreHook(angr.SimStatePlugin):
     @angr.SimStatePlugin.memo
     def copy(self, memo):
         return StoreHook()
-
-class LoadHook(angr.SimStatePlugin):
-    """
-    Allows hooking load operations.
-    (requires our fork of angr to actually respect the hook)
-    """
-    def do_load(self, state, addr, read_size, endness, condition):
-        if condition is not None and state.solver.satisfiable(extra_constraints=[claripy.Not(condition)]):
-            raise ValueError("not yet implemented: conditional load with condition that could be false")
-        # we directly return pairs (state, load_value), knowing that thanks to our hack our modified engine will get to handle them
-        return performLoadWithPossibleForwarding(state, addr, read_size, endness)
-
-    @angr.SimStatePlugin.memo
-    def copy(self, memo):
-        return LoadHook()
 
 def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_endness):
     """
