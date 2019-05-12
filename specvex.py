@@ -265,7 +265,8 @@ class SpecQueue:
         """
         Update the i'th entry by applying the given lambda to it
         """
-        self.q[i] = lam(self.q[i])
+        (thing, time) = self.q[i]
+        self.q[i] = (lam(thing), time)
 
     def getAllOldestFirst(self):
         """
