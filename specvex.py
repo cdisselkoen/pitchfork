@@ -19,6 +19,30 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
     Based on the default SimEngineVEX.
     """
 
+    def lift(self, **kwargs):
+        """
+        An override of the lift method in SimEngineVEX base class.
+        Ensures that any instruction containing a load is considered the end of its irsb.
+        This is necessary in order for us to be able to fork during loads, because jumping
+            into the middle of an irsb causes problems (VEX temp variables won't be correct)
+        """
+
+        firsttry = super().lift(**kwargs)
+        def isLoad(stmt):
+            if type(stmt) == pyvex.IRStmt.WrTmp and type(stmt.data) == pyvex.IRExpr.Load: return True
+            if type(stmt) == pyvex.IRStmt.LoadG: return True
+            return False
+        stops = [nextInstruction(firsttry, stmt) for stmt in firsttry.statements if isLoad(stmt)]
+        stops = list(set(addr for (addr, _) in stops if addr is not None))  # list(set()) removes duplicates
+        if stops:
+            l.debug("Adding stop points {}".format([hex(stop) for stop in stops]))
+            extra_stop_points = kwargs.pop('extra_stop_points', [])
+            if extra_stop_points is None: extra_stop_points = []
+            extra_stop_points.extend(stops)
+            return super().lift(extra_stop_points=extra_stop_points, **kwargs)
+        else:
+            return firsttry
+
     def _handle_statement(self, state, successors, stmt):
         """
         An override of the _handle_statement method in SimEngineVEX base class.
@@ -77,10 +101,22 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
                     # now we tell angr about the fork, so it continues executing the state
                     if l_state is not state:
-                        target = nextInstruction(state, stmt)
+                        # For these "new states" (which angr currently doesn't know about), we
+                        #   also have to finish the current instruction for the state: we will be
+                        #   "branching" to the next instruction, and don't want to skip the rest
+                        #   of the VEX statements in this instruction
+                        # we do this by executing the entire current irsb (basic block), but with
+                        #   arguments to _handle_irsb such that only a few statements (those
+                        #   between where we are and where the next instruction starts) are executed
+                        (next_instr_addr, next_instr_stmt_idx) = nextInstruction(state.scratch.irsb, stmt)
+                        self._handle_irsb(l_state, successors, l_state.scratch.irsb, state.scratch.stmt_idx+1, next_instr_stmt_idx-1 if next_instr_stmt_idx is not None else None, None)
+
+                        # finally, we tell angr about the new state, so it will continue executing it
+                        # (and we tell it to start executing at whatever the next instruction is)
+                        l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
+                        target = next_instr_addr if next_instr_addr is not None else self.handle_expression(l_state, l_state.scratch.irsb.next)  # if next_instr_addr is None, then target the first instruction of the next irsb
                         jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
                         guard = claripy.BVV(1, 1)  # boolean True
-                        l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
                         successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
             # we've now completely handled this statement manually, we're done
@@ -124,12 +160,15 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                     r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, data=data_ao, condition=guard_ao, size=size_ao, fallback=alt_ao)
                     l_state.history.add_action(r)
 
-                # now we tell angr about the fork, so it continues executing the state
+                # for comments on the below, see comments in our handling of WrTmp loads above
                 if l_state is not state:
-                    target = nextInstruction(state, stmt)
+                    (next_instr_addr, next_instr_stmt_idx) = nextInstruction(state.scratch.irsb, stmt)
+                    self._handle_irsb(l_state, successors, l_state.scratch.irsb, state.scratch.stmt_idx+1, next_instr_stmt_idx-1 if next_instr_stmt_idx is not None else None, None)
+
+                    l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
+                    target = next_instr_addr if next_instr_addr is not None else self.handle_expression(l_state, l_state.scratch.irsb.next)  # if next_instr_addr is None, then target the first instruction of the next irsb
                     jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
                     guard = claripy.BVV(1, 1)  # boolean True
-                    l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
                     successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
             # we've now completely handled this statement manually, we're done
@@ -180,14 +219,23 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
 
         return True
 
-def nextInstruction(state, stmt):
+def nextInstruction(irsb, stmt):
+    """
+    Get the address and stmt_idx of the next new _instruction_ (not statement) after the given stmt
+    or (None, None) if the next instruction would not be in this irsb (this stmt was in the last instruction of the irsb)
+    """
     # seems really inefficient; there's probably a better way
     foundThisStmt = False
-    for s in state.scratch.irsb.statements:
-        if foundThisStmt and type(s) is pyvex.stmt.IMark:
-            return s.addr
+    for (idx, s) in enumerate(irsb.statements):
+        if foundThisStmt and type(s) == pyvex.stmt.IMark:
+            return (s.addr, idx)
         if s is stmt:
             foundThisStmt = True
+    if foundThisStmt:
+        # in this case the statement was found, but no IMark after, so the statement was in the last instruction of the irsb
+        return (None, None)
+    else:
+        raise ValueError("could not find stmt {} in irsb {}".format(stmt, irsb))
 
 class SpecState(angr.SimStatePlugin):
     """
