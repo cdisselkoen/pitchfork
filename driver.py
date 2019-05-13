@@ -23,6 +23,12 @@ logging.getLogger('oob').setLevel(logging.DEBUG)
 logging.getLogger('stubs').setLevel(logging.INFO)
 logging.getLogger(__name__).setLevel(logging.INFO)
 
+def getAddressOfSymbol(proj, symbolname):
+    symb = proj.loader.find_symbol(symbolname)
+    if symb is None:
+        raise ValueError("symbol name {} not found".format(symbolname))
+    return symb.rebased_addr
+
 def funcEntryState(proj, funcname, args):
     """
     Get a state ready to enter the given function, with each argument
@@ -35,7 +41,7 @@ def funcEntryState(proj, funcname, args):
         val: an AbstractValue denoting the structure of the argument, including its bitlength
             See notes in abstractdata.py
     """
-    funcaddr = proj.loader.find_symbol(funcname).rebased_addr
+    funcaddr = getAddressOfSymbol(proj, funcname)
     argnames = list("arg{}".format(i) if name is None else name for (i, (name, _)) in enumerate(args))
     argBVSs = list(claripy.BVS(name, val.bits) for (name, (_, val)) in zip(argnames, args))
     state = proj.factory.call_state(funcaddr, *argBVSs)
@@ -97,7 +103,7 @@ def forwarding_example_1():
         ("val", publicValue(bits=8)),
         ("idx2", publicValue(bits=64))
     ])
-    secretaddr = proj.loader.find_symbol('secretarray').rebased_addr
+    secretaddr = getAddressOfSymbol(proj, 'secretarray')
     secretarray_size = 16  # bytes
     state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
     return (proj, state)
@@ -107,7 +113,7 @@ def forwarding_example_2():
     state = funcEntryState(proj, "example_2", [
         ("idx", publicValue(bits=64))
     ])
-    secretaddr = proj.loader.find_symbol('secretarray').rebased_addr
+    secretaddr = getAddressOfSymbol(proj, 'secretarray')
     secretarray_size = 16  # bytes
     state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
     return (proj, state)
@@ -118,7 +124,7 @@ def forwarding_example_3():
         ("idx", publicValue(bits=64)),
         ("mask", publicValue(bits=8))
     ])
-    secretaddr = proj.loader.find_symbol('secretarray').rebased_addr
+    secretaddr = getAddressOfSymbol(proj, 'secretarray')
     secretarray_size = 16  # bytes
     state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
     return (proj, state)
