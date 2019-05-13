@@ -29,6 +29,17 @@ FORCEDINLINE static void wrgadget(uint64_t idx, uint8_t val) {
     }
 }
 
+// gadget with the same behaviors as wrgadget(),
+//   just formulated slightly differently
+FORCEDINLINE static void wrgadget_2(uint64_t idx, uint8_t val) {
+    // E.g., this mask is 0xf if publicarray_size is 16.
+    const uint64_t publicarray_size_mask = publicarray_size - 1;
+
+    if ((idx & publicarray_size_mask) == idx) {
+        publicarray[idx] = val;
+    }
+}
+
 // gadget that allows (speculatively) writing secret data
 //   to an attacker-chosen location (OOB off of secretarray)
 FORCEDINLINE static void wrgadget_sec(uint64_t idx) {
@@ -99,6 +110,18 @@ void example_4() {
     temp &= publicarray2[benignIndex * 512];
 }
 
+void example_5(uint64_t idx, uint8_t val, uint64_t idx2) {
+    // E.g., this mask is 0xf if publicarray_size is 16.
+    // 'volatile' ensures it's actually in memory.
+    volatile uint64_t publicarray_size_mask = publicarray_size - 1;
+
+    // attacker can use this to overwrite publicarray_size_mask
+    wrgadget_2(idx, val);
+
+    // leak the same way as in Example 1, just with a different write gadget
+    temp &= publicarray2[publicarray[idx2 & publicarray_size_mask] * 512];
+}
+
 // Provided just so this can compile into a complete binary.
 // Clearly, these inputs will not result in leaked secrets themselves.
 int main() {
@@ -106,5 +129,6 @@ int main() {
     example_2(0);
     example_3(0, 0);
     example_4();
+    example_5(0, 0, 0);
     return 0;
 }
