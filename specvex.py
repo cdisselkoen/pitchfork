@@ -478,7 +478,7 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_en
         if correct_state.solver.symbolic(s_size_bytes):
             raise ValueError("not yet implemented: load could overlap with an inflight store, but store has symbolic size")
         if load_size_bytes > s_size_bytes:
-            l.warn("load could overlap with an inflight store, but load is larger. We are only considering the case where they do not overlap. This will miss some possible speculative paths.")
+            l.warn("load could overlap with an inflight store, but load is larger. We are only considering the case where they do not overlap. This will miss some possible paths.")
             correct_state.add_constraints(claripy.Not(loadOverlapsStore))
             continue
 
