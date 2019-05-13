@@ -129,6 +129,14 @@ def forwarding_example_3():
     state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
     return (proj, state)
 
+def forwarding_example_4():
+    proj = forwardingTestcasesProject()
+    state = funcEntryState(proj, "example_4", [])
+    secretaddr = getAddressOfSymbol(proj, 'secretarray')
+    secretarray_size = 16  # bytes
+    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    return (proj, state)
+
 def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     """
     max_messagelength: maximum length of the message, in bytes.
@@ -518,6 +526,10 @@ def forwarding2Simgr(**kwargs):
 def forwarding3Simgr(**kwargs):
     return _spectreSimgr(forwarding_example_3, [], "forwarding example 3", "explicit", **kwargs)
 
+def forwarding4Simgr(**kwargs):
+    window = kwargs.pop('window', 20)  # default to window size 20, which should be sufficient for this example. Respects the manual 'window' setting if the caller passed a 'window' argument though
+    return _spectreSimgr(forwarding_example_4, [], "forwarding example 4", "explicit", window=window, **kwargs)
+
 def cryptoSignSimgr(**kwargs):
     return _spectreSimgr(tweetnacl_crypto_sign, [], "TweetNaCl crypto_sign", "explicit", **kwargs)
 
@@ -601,7 +613,8 @@ def runallKocher(**kwargs):
 def runallForwarding(**kwargs):
     return { "1" : forwarding1Simgr(**kwargs),
              "2" : forwarding2Simgr(**kwargs),
-             "3" : forwarding3Simgr(**kwargs)
+             "3" : forwarding3Simgr(**kwargs),
+             "4" : forwarding4Simgr(**kwargs)
            }
 
 def alltests(kocher=True, forwarding=True, tweetnacl=True):

@@ -37,6 +37,15 @@ FORCEDINLINE static void wrgadget_sec(uint64_t idx) {
     }
 }
 
+// gadget that allows (speculatively) writing secret data
+//   to locations slightly off the end of secretarray
+//   (by having the for loop perform additional iterations)
+FORCEDINLINE static void wrgadget_sec_for() {
+    for (unsigned i = 0; i < secretarray_size; i++) {
+        secretarray[i] = secretarray[0];
+    }
+}
+
 // In all of these examples, the arguments to the functions are attacker-controlled
 
 void example_1(uint64_t idx, uint8_t val, uint64_t idx2) {
@@ -82,11 +91,20 @@ void example_3(uint64_t idx, uint8_t mask) {
     }
 }
 
+void example_4() {
+    // attacker can use this to write secret data into benignIndex
+    wrgadget_sec_for();
+
+    // leak the same way as in Example 2, just with a different write gadget
+    temp &= publicarray2[benignIndex * 512];
+}
+
 // Provided just so this can compile into a complete binary.
 // Clearly, these inputs will not result in leaked secrets themselves.
 int main() {
     example_1(0, 0, 0);
     example_2(0);
     example_3(0, 0);
+    example_4();
     return 0;
 }
