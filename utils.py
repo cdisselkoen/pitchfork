@@ -139,8 +139,8 @@ def describeUpcomingBlock(proj, simgr, asm=True):
     asm: see notes on verboseStep
     """
     if not simgr.active:
-        print("Execution finished")
-    if len(simgr.active) > 1:
+        print("No active states remaining")
+    elif len(simgr.active) > 1:
         print("Multiple resulting states, at {}".format(list(hex(s.addr) for s in simgr.active)))
     else:
         addr = simgr.active[0].addr
