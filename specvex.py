@@ -67,110 +67,12 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
                 return False  # report path as deadended
 
         if state.spec.hook_loads and type(stmt) == pyvex.IRStmt.WrTmp and type(stmt.data) == pyvex.IRExpr.Load:
-            # we duplicate the processing for this ourselves, because we potentially need to fork during load processing
-            load = stmt.data
-            with state.history.subscribe_actions() as data_deps:
-                state._inspect('expr', BP_BEFORE, expr=load)
-                load_size_bits = pyvex.const.get_type_size(load.type)
-                load_size_bytes = load_size_bits // state.arch.byte_width
-                with state.history.subscribe_actions() as addr_actions:
-                    addr = self.handle_expression(state, load.addr)
-                if angr.options.UNINITIALIZED_ACCESS_AWARENESS in state.options:
-                    if getattr(addr._model_vsa, 'uninitialized', False):
-                        raise SimUninitializedAccessError('addr', addr)
-                if angr.options.DO_LOADS not in state.options:
-                    results = (state, state.solver.Unconstrained("load_expr_%#x_%d" % (state.scratch.ins_addr, state.scratch.stmt_idx), load_size_bits))
-                else:
-                    results = performLoadWithPossibleForwarding(state, addr, load_size_bytes, load_endness=load.endness)
-
-                for (l_state, l_value) in results:
-                    if load.type.startswith('Ity_F'):
-                        l_value = l_value.raw_to_fp()
-                    if angr.options.TRACK_MEMORY_ACTIONS in l_state.options:
-                        addr_ao = SimActionObject(addr, deps=addr_actions, state=l_state)
-                        r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, size=load_size_bits, data=l_value)
-                        l_state.history.add_action(r)
-                    if angr.options.SIMPLIFY_EXPRS in l_state.options:
-                        l_value = state.solver.simplify(l_value)
-                    if l_state.solver.symbolic(l_value) and angr.options.CONCRETIZE in l_state.options:
-                        concrete_value = l_state.solver.BVV(l_state.solver.eval(l_value), len(l_value))
-                        l_state.add_constraints(l_value == concrete_value)
-                        l_value = concrete_value
-                    l_state._inspect('expr', BP_AFTER, expr=load, expr_result=l_value)
-                    l_state.scratch.store_tmp(stmt.tmp, l_value, deps=data_deps)
-
-                    # now we tell angr about the fork, so it continues executing the state
-                    if l_state is not state:
-                        # For these "new states" (which angr currently doesn't know about), we
-                        #   also have to finish the current instruction for the state: we will be
-                        #   "branching" to the next instruction, and don't want to skip the rest
-                        #   of the VEX statements in this instruction
-                        # we do this by executing the entire current irsb (basic block), but with
-                        #   arguments to _handle_irsb such that only a few statements (those
-                        #   between where we are and where the next instruction starts) are executed
-                        (next_instr_addr, next_instr_stmt_idx) = nextInstruction(state.scratch.irsb, stmt)
-                        self._handle_irsb(l_state, successors, l_state.scratch.irsb, state.scratch.stmt_idx+1, next_instr_stmt_idx-1 if next_instr_stmt_idx is not None else None, None)
-
-                        # finally, we tell angr about the new state, so it will continue executing it
-                        # (and we tell it to start executing at whatever the next instruction is)
-                        l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
-                        target = next_instr_addr if next_instr_addr is not None else self.handle_expression(l_state, l_state.scratch.irsb.next)  # if next_instr_addr is None, then target the first instruction of the next irsb
-                        jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
-                        guard = claripy.BVV(1, 1)  # boolean True
-                        successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
-
+            self._handleWrTmpLoadWithPossibleForwarding(state, successors, stmt)
             # we've now completely handled this statement manually, we're done
             return True
 
         if state.spec.hook_loads and type(stmt) == pyvex.IRStmt.LoadG:
-            # we also duplicate the processing for this ourselves, because we potentially need to fork during load processing
-            with state.history.subscribe_actions() as addr_deps:
-                addr = self.handle_expression(state, stmt.addr)
-            with state.history.subscribe_actions() as alt_deps:
-                alt = self.handle_expression(state, stmt.alt)
-            with state.history.subscribe_actions() as guard_deps:
-                guard = self.handle_expression(state, stmt.guard)
-            if guard is not None and state.solver.satisfiable(extra_constraints=[claripy.Not(guard)]):
-                raise ValueError("not implemented yet: conditional load with condition that could be false")
-
-            read_type, converted_type = stmt.cvt_types
-            read_size_bits = pyvex.const.get_type_size(read_type)
-            converted_size_bits = pyvex.const.get_type_size(converted_type)
-            read_size = read_size_bits // state.arch.byte_width
-
-            results = performLoadWithPossibleForwarding(state, addr, read_size, load_endness=stmt.end)
-
-            for (l_state, l_value) in results:
-                if read_size_bits == converted_size_bits:
-                    converted_expr = l_value
-                elif "S" in stmt.cvt:
-                    converted_expr = l_value.sign_extend(converted_size_bits - read_size_bits)
-                elif "U" in stmt.cvt:
-                    converted_expr = l_value.zero_extend()
-                else:
-                    raise SimStatementError("Unrecognized IRLoadGOp %s!" % stmt.cvt)
-                l_value = l_state.solver.If(guard != 0, converted_expr, alt)
-                l_state.scratch.store_tmp(stmt.dst, l_value, deps=addr_deps + alt_deps + guard_deps)
-                if angr.options.TRACK_MEMORY_ACTIONS in l_state.options:
-                    data_ao = SimActionObject(converted_expr)
-                    alt_ao = SimActionObject(alt, deps=alt_deps, state=l_state)
-                    addr_ao = SimActionObject(addr, deps=addr_deps, state=l_state)
-                    guard_ao = SimActionObject(guard, deps=guard_deps, state=l_state)
-                    size_ao = SimActionObject(converted_size_bits)
-                    r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, data=data_ao, condition=guard_ao, size=size_ao, fallback=alt_ao)
-                    l_state.history.add_action(r)
-
-                # for comments on the below, see comments in our handling of WrTmp loads above
-                if l_state is not state:
-                    (next_instr_addr, next_instr_stmt_idx) = nextInstruction(state.scratch.irsb, stmt)
-                    self._handle_irsb(l_state, successors, l_state.scratch.irsb, state.scratch.stmt_idx+1, next_instr_stmt_idx-1 if next_instr_stmt_idx is not None else None, None)
-
-                    l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
-                    target = next_instr_addr if next_instr_addr is not None else self.handle_expression(l_state, l_state.scratch.irsb.next)  # if next_instr_addr is None, then target the first instruction of the next irsb
-                    jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
-                    guard = claripy.BVV(1, 1)  # boolean True
-                    successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
-
+            self._handleLoadGWithPossibleForwarding(state, successors, stmt)
             # we've now completely handled this statement manually, we're done
             return True
 
@@ -218,6 +120,110 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             #cont_state.scratch.guard = claripy.And(cont_state.scratch.guard, notbranchcond)
 
         return True
+
+    def _handleWrTmpLoadWithPossibleForwarding(self, state, successors, stmt):
+        # we duplicate the processing for WrTmp loads ourselves, because we potentially need to fork during load processing
+        # this is basically an inlined version of what goes on in angr for a WrTmp load, patched to handle possible forwarding
+        load = stmt.data
+        with state.history.subscribe_actions() as data_deps:
+            state._inspect('expr', BP_BEFORE, expr=load)
+            load_size_bits = pyvex.const.get_type_size(load.type)
+            load_size_bytes = load_size_bits // state.arch.byte_width
+            with state.history.subscribe_actions() as addr_actions:
+                addr = self.handle_expression(state, load.addr)
+            if angr.options.UNINITIALIZED_ACCESS_AWARENESS in state.options:
+                if getattr(addr._model_vsa, 'uninitialized', False):
+                    raise SimUninitializedAccessError('addr', addr)
+            if angr.options.DO_LOADS not in state.options:
+                results = (state, state.solver.Unconstrained("load_expr_%#x_%d" % (state.scratch.ins_addr, state.scratch.stmt_idx), load_size_bits))
+            else:
+                results = performLoadWithPossibleForwarding(state, addr, load_size_bytes, load_endness=load.endness)
+
+            for (l_state, l_value) in results:
+                if load.type.startswith('Ity_F'):
+                    l_value = l_value.raw_to_fp()
+                if angr.options.TRACK_MEMORY_ACTIONS in l_state.options:
+                    addr_ao = SimActionObject(addr, deps=addr_actions, state=l_state)
+                    r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, size=load_size_bits, data=l_value)
+                    l_state.history.add_action(r)
+                if angr.options.SIMPLIFY_EXPRS in l_state.options:
+                    l_value = state.solver.simplify(l_value)
+                if l_state.solver.symbolic(l_value) and angr.options.CONCRETIZE in l_state.options:
+                    concrete_value = l_state.solver.BVV(l_state.solver.eval(l_value), len(l_value))
+                    l_state.add_constraints(l_value == concrete_value)
+                    l_value = concrete_value
+                l_state._inspect('expr', BP_AFTER, expr=load, expr_result=l_value)
+                l_state.scratch.store_tmp(stmt.tmp, l_value, deps=data_deps)
+
+                # now we tell angr about the fork, so it continues executing the state
+                if l_state is not state:
+                    # For these "new states" (which angr currently doesn't know about), we
+                    #   also have to finish the current instruction for the state: we will be
+                    #   "branching" to the next instruction, and don't want to skip the rest
+                    #   of the VEX statements in this instruction
+                    # we do this by executing the entire current irsb (basic block), but with
+                    #   arguments to _handle_irsb such that only a few statements (those
+                    #   between where we are and where the next instruction starts) are executed
+                    (next_instr_addr, next_instr_stmt_idx) = nextInstruction(state.scratch.irsb, stmt)
+                    self._handle_irsb(l_state, successors, l_state.scratch.irsb, state.scratch.stmt_idx+1, next_instr_stmt_idx-1 if next_instr_stmt_idx is not None else None, None)
+
+                    # finally, we tell angr about the new state, so it will continue executing it
+                    # (and we tell it to start executing at whatever the next instruction is)
+                    l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
+                    target = next_instr_addr if next_instr_addr is not None else self.handle_expression(l_state, l_state.scratch.irsb.next)  # if next_instr_addr is None, then target the first instruction of the next irsb
+                    jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
+                    guard = claripy.BVV(1, 1)  # boolean True
+                    successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
+
+    def _handleLoadGWithPossibleForwarding(self, state, successors, stmt):
+        # Like for WrTmpLoads, we also duplicate the processing for LoadG's ourselves, because we potentially need to fork during load processing
+        # this is again basically an inlined version of what goes on in angr for a LoadG, patched to handle possible forwarding
+        with state.history.subscribe_actions() as addr_deps:
+            addr = self.handle_expression(state, stmt.addr)
+        with state.history.subscribe_actions() as alt_deps:
+            alt = self.handle_expression(state, stmt.alt)
+        with state.history.subscribe_actions() as guard_deps:
+            guard = self.handle_expression(state, stmt.guard)
+        if guard is not None and state.solver.satisfiable(extra_constraints=[claripy.Not(guard)]):
+            raise ValueError("not implemented yet: conditional load with condition that could be false")
+
+        read_type, converted_type = stmt.cvt_types
+        read_size_bits = pyvex.const.get_type_size(read_type)
+        converted_size_bits = pyvex.const.get_type_size(converted_type)
+        read_size = read_size_bits // state.arch.byte_width
+
+        results = performLoadWithPossibleForwarding(state, addr, read_size, load_endness=stmt.end)
+
+        for (l_state, l_value) in results:
+            if read_size_bits == converted_size_bits:
+                converted_expr = l_value
+            elif "S" in stmt.cvt:
+                converted_expr = l_value.sign_extend(converted_size_bits - read_size_bits)
+            elif "U" in stmt.cvt:
+                converted_expr = l_value.zero_extend()
+            else:
+                raise SimStatementError("Unrecognized IRLoadGOp %s!" % stmt.cvt)
+            l_value = l_state.solver.If(guard != 0, converted_expr, alt)
+            l_state.scratch.store_tmp(stmt.dst, l_value, deps=addr_deps + alt_deps + guard_deps)
+            if angr.options.TRACK_MEMORY_ACTIONS in l_state.options:
+                data_ao = SimActionObject(converted_expr)
+                alt_ao = SimActionObject(alt, deps=alt_deps, state=l_state)
+                addr_ao = SimActionObject(addr, deps=addr_deps, state=l_state)
+                guard_ao = SimActionObject(guard, deps=guard_deps, state=l_state)
+                size_ao = SimActionObject(converted_size_bits)
+                r = SimActionData(l_state, l_state.memory.id, SimActionData.READ, addr=addr_ao, data=data_ao, condition=guard_ao, size=size_ao, fallback=alt_ao)
+                l_state.history.add_action(r)
+
+            # for comments on the below, see comments in our handling of WrTmp loads above
+            if l_state is not state:
+                (next_instr_addr, next_instr_stmt_idx) = nextInstruction(state.scratch.irsb, stmt)
+                self._handle_irsb(l_state, successors, l_state.scratch.irsb, state.scratch.stmt_idx+1, next_instr_stmt_idx-1 if next_instr_stmt_idx is not None else None, None)
+
+                l.debug("time {}: forking for misforwarding on a load of addr {}".format(state.spec.ins_executed, addr))
+                target = next_instr_addr if next_instr_addr is not None else self.handle_expression(l_state, l_state.scratch.irsb.next)  # if next_instr_addr is None, then target the first instruction of the next irsb
+                jumpkind = 'Ijk_Boring'  # seems like a reasonable choice? what is this used for?
+                guard = claripy.BVV(1, 1)  # boolean True
+                successors.add_successor(l_state, target, guard, jumpkind, add_guard=False, exit_stmt_idx=None, exit_ins_addr=None)
 
 def nextInstruction(irsb, stmt):
     """
