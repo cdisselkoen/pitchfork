@@ -82,6 +82,9 @@ def kocher11(s):
     state = funcEntryState(proj, "victim_function_v11", [(None, publicValue())])
     return (proj, state)
 
+def newSpectreV1TestcasesProject():
+    return angr.Project('new-testcases/spectrev1')
+
 def forwardingTestcasesProject():
     return angr.Project('new-testcases/forwarding')
 
@@ -146,6 +149,72 @@ def forwarding_example_5():
     ])
     addSecretObject(proj, state, 'secretarray', 16)
     return (proj, state)
+
+def _typicalSpectrev1Case(casename):
+    proj = newSpectreV1TestcasesProject()
+    state = funcEntryState(proj, casename, [ ("idx", publicValue(bits=64)) ])
+    addSecretObject(proj, state, 'secretarray', 16)
+    return (proj, state)
+
+def spectrev1_case_1():
+    return _typicalSpectrev1Case("case_1")
+
+def spectrev1_case_2():
+    return _typicalSpectrev1Case("case_2")
+
+def spectrev1_case_3():
+    return _typicalSpectrev1Case("case_3")
+
+def spectrev1_case_4():
+    return _typicalSpectrev1Case("case_4")
+
+def spectrev1_case_5():
+    return _typicalSpectrev1Case("case_5")
+
+def spectrev1_case_6():
+    return _typicalSpectrev1Case("case_6")
+
+def spectrev1_case_7():
+    return _typicalSpectrev1Case("case_7")
+
+def spectrev1_case_8():
+    return _typicalSpectrev1Case("case_8")
+
+def spectrev1_case_9():
+    return _typicalSpectrev1Case("case_9")
+
+def spectrev1_case_10():
+    proj = newSpectreV1TestcasesProject()
+    state = funcEntryState(proj, "case_10", [
+        ("idx", publicValue(bits=64)),
+        ("val", publicValue(bits=8))
+    ])
+    addSecretObject(proj, state, 'secretarray', 16)
+    return (proj, state)
+
+def spectrev1_case_11gcc():
+    return _typicalSpectrev1Case("case_11gcc")
+
+def spectrev1_case_11ker():
+    return _typicalSpectrev1Case("case_11ker")
+
+def spectrev1_case_11sub():
+    return _typicalSpectrev1Case("case_11sub")
+
+def spectrev1_case_12():
+    proj = newSpectreV1TestcasesProject()
+    state = funcEntryState(proj, "case_12", [
+        ("idx", publicValue(bits=64)),
+        ("val", publicValue(bits=8))
+    ])
+    addSecretObject(proj, state, 'secretarray', 16)
+    return (proj, state)
+
+def spectrev1_case_13():
+    return _typicalSpectrev1Case("case_13")
+
+def spectrev1_case_14():
+    return _typicalSpectrev1Case("case_14")
 
 def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
     """
@@ -527,6 +596,54 @@ All of the below simgr-related functions can take any of the keyword arguments t
 See docs on _spectreSimgr().
 """
 
+def spectrev1case1Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_1, [], "Spectre v1 case 1", "explicit", **kwargs)
+
+def spectrev1case2Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_2, [], "Spectre v1 case 2", "explicit", **kwargs)
+
+def spectrev1case3Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_3, [], "Spectre v1 case 3", "explicit", **kwargs)
+
+def spectrev1case4Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_4, [], "Spectre v1 case 4", "explicit", **kwargs)
+
+def spectrev1case5Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_5, [], "Spectre v1 case 5", "explicit", **kwargs)
+
+def spectrev1case6Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_6, [], "Spectre v1 case 6", "explicit", **kwargs)
+
+def spectrev1case7Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_7, [], "Spectre v1 case 7", "explicit", **kwargs)
+
+def spectrev1case8Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_8, [], "Spectre v1 case 8", "explicit", **kwargs)
+
+def spectrev1case9Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_9, [], "Spectre v1 case 9", "explicit", **kwargs)
+
+def spectrev1case10Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_10, [], "Spectre v1 case 10", "explicit", **kwargs)
+
+def spectrev1case11gccSimgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_11gcc, [], "Spectre v1 case 11gcc", "explicit", **kwargs)
+
+def spectrev1case11kerSimgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_11ker, [], "Spectre v1 case 11ker", "explicit", **kwargs)
+
+def spectrev1case11subSimgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_11sub, [], "Spectre v1 case 11sub", "explicit", **kwargs)
+
+def spectrev1case12Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_12, [], "Spectre v1 case 12", "explicit", **kwargs)
+
+def spectrev1case13Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_13, [], "Spectre v1 case 13", "explicit", **kwargs)
+
+def spectrev1case14Simgr(**kwargs):
+    return _spectreSimgr(spectrev1_case_14, [], "Spectre v1 case 14", "explicit", **kwargs)
+
 def forwarding1Simgr(**kwargs):
     return _spectreSimgr(forwarding_example_1, [], "forwarding example 1", "explicit", **kwargs)
 
@@ -623,6 +740,25 @@ def runallKocher(**kwargs):
         {s:kocherSimgr(s, **kwargs) for s in ['01','02','03','05','07','04','06','08','09','10','12','13','14','15']},
         {('11'+s):kocher11Simgr(s, **kwargs) for s in ['gcc','ker','sub']})
 
+def runallSpectrev1(**kwargs):
+    return { "01" : spectrev1case1Simgr(**kwargs),
+             "02" : spectrev1case2Simgr(**kwargs),
+             "03" : spectrev1case3Simgr(**kwargs),
+             "04" : spectrev1case4Simgr(**kwargs),
+             "05" : spectrev1case5Simgr(**kwargs),
+             "06" : spectrev1case6Simgr(**kwargs),
+             "07" : spectrev1case7Simgr(**kwargs),
+             "08" : spectrev1case8Simgr(**kwargs),
+             "09" : spectrev1case9Simgr(**kwargs),
+             "10" : spectrev1case10Simgr(**kwargs),
+             "11gcc" : spectrev1case11gccSimgr(**kwargs),
+             "11ker" : spectrev1case11kerSimgr(**kwargs),
+             "11sub" : spectrev1case11subSimgr(**kwargs),
+             "12" : spectrev1case12Simgr(**kwargs),
+             "13" : spectrev1case13Simgr(**kwargs),
+             "14" : spectrev1case14Simgr(**kwargs)
+           }
+
 def runallForwarding(**kwargs):
     return { "1" : forwarding1Simgr(**kwargs),
              "2" : forwarding2Simgr(**kwargs),
@@ -631,14 +767,15 @@ def runallForwarding(**kwargs):
              "5" : forwarding5Simgr(**kwargs)
            }
 
-def alltests(kocher=True, forwarding=True, tweetnacl=True):
+def alltests(kocher=True, spectrev1=True, forwarding=True, tweetnacl=True):
     """
     kocher: whether to run Kocher tests
+    spectrev1: whether to run the new spectrev1 tests
     forwarding: whether to run forwarding tests
     tweetnacl: whether to run TweetNaCl tests
     """
     from pprint import pprint
-    if not kocher and not forwarding and not tweetnacl:
+    if not kocher and not spectrev1 and not forwarding and not tweetnacl:
         raise ValueError("no tests specified")
     logging.getLogger('specvex').setLevel(logging.WARNING)
     logging.getLogger('spectre').setLevel(logging.WARNING)
@@ -646,6 +783,9 @@ def alltests(kocher=True, forwarding=True, tweetnacl=True):
     if kocher:
         kocher_notspec = runallKocher(spec=False)
         kocher_spec = runallKocher(spec=True)
+    if spectrev1:
+        spectrev1_notspec = runallSpectrev1(spec=False)
+        spectrev1_spec = runallSpectrev1(spec=True)
     if forwarding:
         forwarding_notspec = runallForwarding(spec=False)
         forwarding_spec = runallForwarding(spec=True, misforwarding=False)
@@ -659,6 +799,10 @@ def alltests(kocher=True, forwarding=True, tweetnacl=True):
         return ("FAIL: detected a violation without speculative execution" if violationDetected(kocher_notspec[s])
             else "FAIL: no violation detected" if not violationDetected(kocher_spec[s])
             else "PASS")
+    def spectrev1_testResult(s):
+        return ("FAIL: detected a violation without speculative execution" if violationDetected(spectrev1_notspec[s])
+            else "FAIL: no violation detected" if not violationDetected(spectrev1_spec[s])
+            else "PASS")
     def forwarding_testResult(s):
         return ("FAIL: detected a violation without speculative execution" if violationDetected(forwarding_notspec[s])
             else "FAIL: detected a violation without misforwarding" if violationDetected(forwarding_spec[s])
@@ -669,19 +813,24 @@ def alltests(kocher=True, forwarding=True, tweetnacl=True):
             else "violation detected" if violationDetected(tweetnacl_spec[s])
             else "no violation detected")
     kocher_results = {k:kocher_testResult(k) for k in kocher_spec.keys()} if kocher else None
+    spectrev1_results = {k:spectrev1_testResult(k) for k in spectrev1_spec.keys()} if spectrev1 else None
     forwarding_results = {k:forwarding_testResult(k) for k in forwarding_spec.keys()} if forwarding else None
     tweetnacl_results = {k:tweetnacl_testResult(k) for k in tweetnacl_spec.keys()} if tweetnacl else None
-    if kocher and not forwarding and not tweetnacl:
+    if kocher and not spectrev1 and not forwarding and not tweetnacl:
         print("Kocher tests:")
         pprint(kocher_results)
-    elif forwarding and not kocher and not tweetnacl:
+    elif spectrev1 and not kocher and not forwarding and not tweetnacl:
+        print("Spectrev1 tests:")
+        pprint(spectrev1_results)
+    elif forwarding and not kocher and not spectrev1 and not tweetnacl:
         print("Forwarding tests:")
         pprint(forwarding_results)
-    elif tweetnacl and not kocher and not forwarding:
+    elif tweetnacl and not kocher and not spectrev1 and not forwarding:
         print("TweetNaCl tests:")
         pprint(tweetnacl_results)
     else:
         pprint({"Kocher tests":kocher_results,
+                "Spectrev1 tests":spectrev1_results,
                 "Forwarding tests":forwarding_results,
                 "TweetNaCl tests":tweetnacl_results})
 
