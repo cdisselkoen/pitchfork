@@ -96,6 +96,14 @@ def donnaProject():
 def opensslProject():
     return angr.Project('openssl/openssl')
 
+def addSecretObject(proj, state, symbol, length):
+    """
+    In the given state, mark the given symbol with the given length (in bytes) as secret.
+    """
+    secretaddr = getAddressOfSymbol(proj, symbol)
+    prevSecrets = state.globals.get('otherSecrets', [])
+    state.globals['otherSecrets'] = [(secretaddr, secretaddr+length)] + prevSecrets
+
 def forwarding_example_1():
     proj = forwardingTestcasesProject()
     state = funcEntryState(proj, "example_1", [
@@ -103,9 +111,7 @@ def forwarding_example_1():
         ("val", publicValue(bits=8)),
         ("idx2", publicValue(bits=64))
     ])
-    secretaddr = getAddressOfSymbol(proj, 'secretarray')
-    secretarray_size = 16  # bytes
-    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    addSecretObject(proj, state, 'secretarray', 16)
     return (proj, state)
 
 def forwarding_example_2():
@@ -113,9 +119,7 @@ def forwarding_example_2():
     state = funcEntryState(proj, "example_2", [
         ("idx", publicValue(bits=64))
     ])
-    secretaddr = getAddressOfSymbol(proj, 'secretarray')
-    secretarray_size = 16  # bytes
-    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    addSecretObject(proj, state, 'secretarray', 16)
     return (proj, state)
 
 def forwarding_example_3():
@@ -124,17 +128,13 @@ def forwarding_example_3():
         ("idx", publicValue(bits=64)),
         ("mask", publicValue(bits=8))
     ])
-    secretaddr = getAddressOfSymbol(proj, 'secretarray')
-    secretarray_size = 16  # bytes
-    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    addSecretObject(proj, state, 'secretarray', 16)
     return (proj, state)
 
 def forwarding_example_4():
     proj = forwardingTestcasesProject()
     state = funcEntryState(proj, "example_4", [])
-    secretaddr = getAddressOfSymbol(proj, 'secretarray')
-    secretarray_size = 16  # bytes
-    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    addSecretObject(proj, state, 'secretarray', 16)
     return (proj, state)
 
 def forwarding_example_5():
@@ -144,9 +144,7 @@ def forwarding_example_5():
         ("val", publicValue(bits=8)),
         ("idx2", publicValue(bits=64))
     ])
-    secretaddr = getAddressOfSymbol(proj, 'secretarray')
-    secretarray_size = 16  # bytes
-    state.globals['otherSecrets'] = [(secretaddr, secretaddr+secretarray_size)]
+    addSecretObject(proj, state, 'secretarray', 16)
     return (proj, state)
 
 def tweetnacl_crypto_sign(max_messagelength=256, with_hash_stub=True):
