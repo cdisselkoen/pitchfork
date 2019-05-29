@@ -1,4 +1,4 @@
-from specvex import SimEngineSpecVEX, SpecState
+from specvex import makeSpeculative
 from oob import OOBState, OOBViolationFilter
 from spectre import SpectreOOBState, SpectreExplicitState, SpectreViolationFilter
 from irop_hook import IROpHook
@@ -512,21 +512,6 @@ def armSpectreExplicitChecks(proj, state):
     state.register_plugin('spectre', SpectreExplicitState(vars=args.values(), secretIntervals=otherSecrets))
     state.spectre.arm(state)
     assert state.spectre.armed()
-
-def makeSpeculative(proj, state, window=250, misforwarding=False):
-    """
-    window: size of speculative window (~ROB) in x86 instructions.
-    misforwarding: whether to enable misforwarding features, i.e., speculatively
-        missing a forward from an inflight store.
-    """
-    proj.engines.register_plugin('specvex', SimEngineSpecVEX())
-    proj.engines.order = ['specvex' if x=='vex' else x for x in proj.engines.order]  # replace 'vex' with 'specvex'
-    if proj.engines.has_plugin('vex'): proj.engines.release_plugin('vex')
-
-    #state.options.discard(angr.options.LAZY_SOLVES)  # turns out LAZY_SOLVES is not on by default
-    state.register_plugin('spec', SpecState(window))
-    state.spec.arm(state, misforwarding=misforwarding)
-    assert state.spec.ins_executed == 0
 
 def getSimgr(proj, state, spec=True, window=None, misforwarding=False):
     """
