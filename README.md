@@ -43,15 +43,15 @@ We are using the versions from Spectector; both the sources and binaries
 can be found in the [spectector-clang](spectector-clang) folder.
 
 - A revised version of the Kocher testcases.
-The main difference in our revision is that unlike the original testcases,
-our revised ones do not perform out-of-bounds or secret-dependent memory
-accesses, or branch on secret data, when executed non-speculatively.
+The main difference in our revision is when executed _non-speculatively_,
+our revised testcases do not perform out-of-bounds or secret-dependent memory
+accesses, or branch on secret data.
 These cases are found in [new-testcases/spectrev1.c](new-testcases/spectrev1.c);
 detailed explanations of changes can be found in comments in that file.
 
 - A new set of testcases for Spectre v1.1.
-Spectre v1.1 is similar to Spectre v1 except that it relies on an out-of-bounds
-write rather than an out-of-bounds read.
+Spectre v1.1 is similar to Spectre v1 except that it relies on out-of-bounds
+writes rather than out-of-bounds reads.
 Our testcases demonstrate a variety of ways that these vulnerabilities can appear.
 They are found in [new-testcases/forwarding.c](new-testcases/forwarding.c);
 detailed explanations of each of the cases can be found in comments in that file.
