@@ -8,10 +8,13 @@ from abstractdata import publicValue, secretValue, pointerTo, pointerToUnconstra
 
 import angr
 import claripy
-import monkeyhex
 import logging
 l = logging.getLogger(name=__name__)
 
+try:
+    import monkeyhex
+except:
+    pass
 import time
 
 #logging.getLogger('angr.state_plugins.symbolic_memory').setLevel(logging.DEBUG)
