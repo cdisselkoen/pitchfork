@@ -1,6 +1,6 @@
 from specvex import makeSpeculative
-from oob import OOBState, OOBViolationFilter
-from spectre import SpectreOOBState, SpectreExplicitState, SpectreViolationFilter
+from oob import armBoundsChecks, OOBViolationFilter
+from spectre import armSpectreOOBChecks, armSpectreExplicitChecks, SpectreViolationFilter
 from irop_hook import IROpHook
 from interactiveutils import *  #pylint:disable=unused-wildcard-import
 from stubs import *  #pylint:disable=unused-wildcard-import
@@ -492,26 +492,7 @@ def openssl_ASN1_item_sign():
     addEVPStubs(proj)
     return (proj, state)
 
-# Set up checking
-
-def armBoundsChecks(proj,state):
-    state.register_plugin('oob', OOBState(proj))
-    assert len(state.oob.inbounds_intervals) > 0
-    state.oob.arm(state)
-    assert state.oob.armed()
-
-def armSpectreOOBChecks(proj,state):
-    state.register_plugin('oob', OOBState(proj))
-    state.register_plugin('spectre', SpectreOOBState())
-    state.spectre.arm(state)
-    assert state.spectre.armed()
-
-def armSpectreExplicitChecks(proj, state):
-    args = state.globals['args']
-    otherSecrets = state.globals['otherSecrets'] if 'otherSecrets' in state.globals else []
-    state.register_plugin('spectre', SpectreExplicitState(vars=args.values(), secretIntervals=otherSecrets))
-    state.spectre.arm(state)
-    assert state.spectre.armed()
+# Given a project and state, get a simgr
 
 def getSimgr(proj, state, spec=True, window=None, misforwarding=False):
     """

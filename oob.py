@@ -6,6 +6,12 @@ from utils import describeAst
 import logging
 l = logging.getLogger(name=__name__)
 
+def armBoundsChecks(proj,state):
+    state.register_plugin('oob', OOBState(proj))
+    assert len(state.oob.inbounds_intervals) > 0
+    state.oob.arm(state)
+    assert state.oob.armed()
+
 class OOBState(angr.SimStatePlugin):
     """
     State tracking for crudely marking what is determined 'in-bounds'.

@@ -1,13 +1,26 @@
 import angr
 import claripy
 
-from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
+from oob import OOBStrategy, OOBState, can_be_oob, concretization_succeeded, log_concretization
 from taint import taintedUnconstrainedBits, is_tainted
 from utils import isAst, describeAst, isDefinitelyEqual
 from abstractdata import AbstractValue, AbstractPointer, AbstractPointerToUnconstrainedPublic
 
 import logging
 l = logging.getLogger(name=__name__)
+
+def armSpectreOOBChecks(proj,state):
+    state.register_plugin('oob', OOBState(proj))
+    state.register_plugin('spectre', SpectreOOBState())
+    state.spectre.arm(state)
+    assert state.spectre.armed()
+
+def armSpectreExplicitChecks(proj, state):
+    args = state.globals['args']
+    otherSecrets = state.globals['otherSecrets'] if 'otherSecrets' in state.globals else []
+    state.register_plugin('spectre', SpectreExplicitState(vars=args.values(), secretIntervals=otherSecrets))
+    state.spectre.arm(state)
+    assert state.spectre.armed()
 
 class SpectreOOBState(angr.SimStatePlugin):
     """
