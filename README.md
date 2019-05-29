@@ -30,16 +30,17 @@ code for v4 is here, but hasn't been tested).
     ```
     then proceed with the following steps using the pypy virtualenv. Inside this
     virtualenv, `python` should give you a pypy interpreter rather than an
-    ordinary Python one. You'll need to activate the virtualenv whenever you want
-    to run Pitchfork.
-    - Pitchfork has only been tested with PyPy 7.0-7.1 (both of which implement Python 3.6.1).
+    ordinary Python one.
+    - Pitchfork has only been tested with PyPy 7.0-7.1 (both of which
+    implement Python 3.6.1), but it should also work with other PyPy versions
+    and even other Python interpreters.
 - Install [angr](https://github.com/angr/angr) using the directions [here](https://docs.angr.io/introductory-errata/install)
     - Pitchfork currently only works with angr version 8.19.4.5 (latest in Pip as of this writing)
     - You won't actually be using this angr, as Pitchfork requires a slightly
     patched version of angr which we'll install next. But performing the typical
     angr install process ensures that all dependencies (Python and otherwise) for
     angr 8.19.4.5 are properly installed
-- Clone [our fork of angr](https://github.com/cdisselkoen/angr) and checkout its `more-hooks` branch:
+- Clone [our fork of angr](https://github.com/cdisselkoen/angr) _inside_ this `pitchfork` directory, then checkout its `more-hooks` branch:
     ```bash
     cd pitchfork
     git clone https://github.com/cdisselkoen/angr
@@ -60,9 +61,9 @@ code for v4 is here, but hasn't been tested).
     cd pitchfork
     source [your_virtualenv_name]/bin/activate
     ```
-- Inside your Python virtualenv, run `python pitchfork.py` to run tests
-against all the original Kocher test cases, our new Spectre v1 test cases,
-and our Spectre v1.1 test cases (see below).
+- Run `python pitchfork.py` to run tests against all the original Kocher test
+cases, our new Spectre v1 test cases, and our Spectre v1.1 test cases (see
+below).
 - Explanations of expected Kocher test results are in [kocher_analysis.txt](kocher_analysis.txt) (see also the new Spectre testcases)
 - To run other tests or workloads, look at the functions in [pitchfork.py](pitchfork.py)
 - Some useful utilities for interactive investigation are in [interactiveutils.py](interactiveutils.py) (imported with [pitchfork.py](pitchfork.py))
