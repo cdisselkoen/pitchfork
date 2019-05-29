@@ -3,7 +3,7 @@ import claripy
 
 from oob import OOBStrategy, can_be_oob, concretization_succeeded, log_concretization
 from taint import taintedUnconstrainedBits, is_tainted
-from utils import isAst, describeAst
+from utils import isAst, describeAst, isDefinitelyEqual
 from abstractdata import AbstractValue, AbstractPointer, AbstractPointerToUnconstrainedPublic
 
 import logging

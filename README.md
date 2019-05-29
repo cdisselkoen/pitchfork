@@ -32,7 +32,7 @@ against all the original Kocher test cases, our new Spectre v1 test cases,
 and our Spectre v1.1 test cases (see below).
 - Explanations of expected Kocher test results are in [kocher_analysis.txt](kocher_analysis.txt) (see also the new Spectre testcases)
 - To run other tests or workloads, look at the functions in [pitchfork.py](pitchfork.py)
-- Some useful utilities for interactive investigation are in [utils.py](utils.py) (imported with [pitchfork.py](pitchfork.py))
+- Some useful utilities for interactive investigation are in [interactiveutils.py](interactiveutils.py) (imported with [pitchfork.py](pitchfork.py))
 
 # Our Spectre testcases
 

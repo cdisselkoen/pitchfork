@@ -2,7 +2,7 @@ from specvex import SimEngineSpecVEX, SpecState
 from oob import OOBState, OOBViolationFilter
 from spectre import SpectreOOBState, SpectreExplicitState, SpectreViolationFilter
 from irop_hook import IROpHook
-from utils import *  #pylint:disable=unused-wildcard-import
+from interactiveutils import *  #pylint:disable=unused-wildcard-import
 from stubs import *  #pylint:disable=unused-wildcard-import
 from abstractdata import publicValue, secretValue, pointerTo, pointerToUnconstrainedPublic, publicArray, secretArray, array, struct
 
