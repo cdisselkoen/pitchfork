@@ -34,11 +34,15 @@ and our Spectre v1.1 test cases (see below).
 - To run other tests or workloads, look at the functions in [pitchfork.py](pitchfork.py)
 - Some useful utilities for interactive investigation are in [utils.py](utils.py) (imported with [pitchfork.py](pitchfork.py))
 
-# Our new Spectre testcases
+# Our Spectre testcases
 
-We have two sets of Spectre testcases:
+We have three sets of Spectre testcases:
 
-- A revised version of the well-known Kocher testcases for Spectre v1.
+- The original well-known Kocher testcases for Spectre v1.
+We are using the versions from Spectector; both the sources and binaries
+can be found in the [spectector-clang](spectector-clang) folder.
+
+- A revised version of the Kocher testcases.
 The main difference in our revision is that unlike the original testcases,
 our revised ones do not perform out-of-bounds or secret-dependent memory
 accesses, or branch on secret data, when executed non-speculatively.
