@@ -1,3 +1,15 @@
+# What is Pitchfork?
+
+Pitchfork is a static analysis tool, built on [angr](https://github.com/angr/angr), which performs _speculative symbolic execution_.
+That is, it not only executes the "correct" or "sequential" paths of
+a program, but also the "mispredicted" or "speculative" paths, subject
+to some speculation window size.
+Pitchfork finds paths where secret data is used in either address
+calculations or branch conditions (and thus leaked), even speculatively -
+these paths represent Spectre vulnerabilities.
+Pitchfork covers Spectre v1, Spectre v1.1, and theoretically Spectre v4
+(the code for v4 is here, but hasn't been tested).
+
 # How to Run
 
 - Clone this repo
@@ -18,7 +30,7 @@
 - Inside your Python virtualenv, run `python pitchfork.py` to run tests
 against all the original Kocher test cases, our new Spectre v1 test cases,
 and our Spectre v1.1 test cases (see below).
-- Current status / explanations of expected Kocher test results is in [kocher_analysis.txt](kocher_analysis.txt)
+- Explanations of expected Kocher test results are in [kocher_analysis.txt](kocher_analysis.txt) (see also the new Spectre testcases)
 - To run other tests or workloads, look at the functions in [pitchfork.py](pitchfork.py)
 - Some useful utilities for interactive investigation are in [utils.py](utils.py) (imported with [pitchfork.py](pitchfork.py))
 
