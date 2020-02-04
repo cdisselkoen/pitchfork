@@ -9,8 +9,7 @@ speculation window size.
 Pitchfork finds paths where secret data is used in either address
 calculations or branch conditions (and thus leaked), even speculatively -
 these paths represent Spectre vulnerabilities.
-Pitchfork covers Spectre v1, Spectre v1.1, and theoretically Spectre v4 (the
-code for v4 is here, but hasn't been tested).
+Pitchfork covers Spectre v1, Spectre v1.1, and Spectre v4.
 
 # Installing
 
