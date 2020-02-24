@@ -129,10 +129,20 @@ def array(values):
     for val in values: assert isinstance(val, AbstractValue)
     return values
 
+def flatten(elements):
+    final = []
+    for el in elements:
+        if isinstance(el, list):
+            final += flatten(el)
+        else:
+            final.append(el)
+    return final
+
 def struct(elements):
     """
     A struct of other AbstractValues
     elements: the AbstractValues in the struct
     """
-    for el in elements: assert isinstance(el, AbstractValue)
-    return elements
+    flattened = flatten(elements)
+    for el in flattened: assert isinstance(el, AbstractValue)
+    return flattened

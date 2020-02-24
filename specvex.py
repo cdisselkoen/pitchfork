@@ -113,16 +113,34 @@ class SimEngineSpecVEX(angr.SimEngineVEX):
             # (to simulate possible wrong-path execution, i.e. branch misprediction)
             # and add the path constraints later, only after _spec_window_size instructions have passed
 
-            exit_state = state.copy()
-            cont_state = state
-
             branchcond = guard
             notbranchcond = claripy.Not(branchcond)
-            if not state.solver.is_true(branchcond): exit_state.spec.conditionals.append(branchcond)  # don't bother adding a deferred 'True' constraint
-            if not state.solver.is_true(notbranchcond): cont_state.spec.conditionals.append(notbranchcond)  # don't bother adding a deferred 'True' constraint
 
-            successors.add_successor(exit_state, target, guard, jumpkind, add_guard=False,
-                                    exit_stmt_idx=state.scratch.stmt_idx, exit_ins_addr=state.scratch.ins_addr)
+            exit_state = None
+            cont_state = None
+
+            if hasattr(state.spectre, 'takepath') and state.spectre.takepath:
+                npath = state.spectre.takepath.popleft()
+                if npath == '1':
+                    exit_state = state
+                elif npath == '0':
+                    cont_state = state
+            else:
+                exit_state = state.copy()
+                cont_state = state
+
+            if exit_state is not None:
+                exit_state.spec.path.append('1')
+                if not state.solver.is_true(branchcond): exit_state.spec.conditionals.append(branchcond)  # don't bother adding a deferred 'True' constraint
+                successors.add_successor(exit_state, target, guard, jumpkind, add_guard=False,
+                                        exit_stmt_idx=state.scratch.stmt_idx, exit_ins_addr=state.scratch.ins_addr)
+            if cont_state is not None:
+                cont_state.spec.path.append('0')
+                if not state.solver.is_true(notbranchcond): cont_state.spec.conditionals.append(notbranchcond)  # don't bother adding a deferred 'True' constraint
+                return True
+            else:
+                return False
+
 
             # We don't add the guard for the exit_state (add_guard=False).
             # Unfortunately, the call to add the 'default' successor at the end of an irsb
@@ -278,7 +296,7 @@ class SpecState(angr.SimStatePlugin):
     mispredicted: indicates whether a misprediction error has been encountered
     """
 
-    def __init__(self, spec_window_size, ins=0, conditionals=None, stores=None, hook_loads=False, mispredicted=False):
+    def __init__(self, spec_window_size, ins=0, conditionals=None, stores=None, hook_loads=False, mispredicted=False, path=[]):
         """
         All arguments other than spec_window_size should be left default unless
             you're the copy constructor
@@ -296,6 +314,7 @@ class SpecState(angr.SimStatePlugin):
             self.stores = SpecQueue(ins)
         self.hook_loads = hook_loads
         self.mispredicted = mispredicted
+        self.path = path
 
     def arm(self, state, misforwarding=False):
         state.inspect.b('instruction', when=BP_BEFORE, action=tickSpecState)
@@ -312,7 +331,8 @@ class SpecState(angr.SimStatePlugin):
             conditionals=self.conditionals.copy(),
             stores=self.stores.copy(),
             hook_loads=self.hook_loads,
-            mispredicted=self.mispredicted
+            mispredicted=self.mispredicted,
+            path=self.path.copy()
         )
 
     def tick(self):
@@ -499,8 +519,8 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_en
         if correct_state.solver.symbolic(s_size_bytes):
             raise ValueError("not yet implemented: load could overlap with an inflight store, but store has symbolic size")
         if load_size_bytes > s_size_bytes:
-            l.warn("load could overlap with an inflight store, but load is larger. We are only considering the case where they do not overlap. This will miss some possible paths.")
-            correct_state.add_constraints(claripy.Not(loadOverlapsStore))
+            #l.warn("load could overlap with an inflight store, but load is larger. We are only considering the case where they do not overlap. This will miss some possible paths.")
+            #correct_state.add_constraints(claripy.Not(loadOverlapsStore))
             continue
 
         # if we got here, the load may overlap the store, but doesn't necessarily have to
@@ -526,7 +546,8 @@ def performLoadWithPossibleForwarding(state, load_addr, load_size_bytes, load_en
         # now we're left with the case where the load does overlap the store
 
         if isDefinitelyNotEqual_Solver(correct_state, load_addr, s_addr):
-            raise ValueError("not yet implemented: load overlaps with an inflight store but cannot be identical address")
+            #l.warn("load could overlap with an inflight store, but load has a different address (they are misaligned). We are only considering the case where they do not overlap. This will miss some possible paths.")
+            continue
         elif not isDefinitelyEqual_Solver(correct_state, load_addr, s_addr):
             l.warn("load could overlap with store misaligned, but we are only considering the aligned case")
             # we choose to only consider cases where they're exactly equal, so we add that constraint

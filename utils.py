@@ -11,6 +11,22 @@ def describeAst(ast, checkTaint=True):
             else "{} (untainted, but with annotations {})".format(ast, ast.annotations) if hasattr(ast, 'annotations') and ast.annotations \
             else "{} (untainted)".format(ast)
 
+def canonicalizeAdd(a):
+    canon = a
+    ctotal = 0
+    if isinstance(a, int):
+        return a
+    if a.op == '__add__':
+        canon = a.args[0]
+        for arg in a.args[1:]:
+            if arg.op == 'BVV':
+                ctotal += arg.args[0]
+            else:
+                canon += arg
+        if ctotal:
+            canon += ctotal
+    return canon
+
 def isDefinitelyEqual(a,b):
     """
     Does 'a' definitely equal 'b', i.e., is it impossible for them to be not equal.
@@ -20,7 +36,7 @@ def isDefinitelyEqual(a,b):
     To be less conservative, use isDefinitelyEqual_Solver() (below)
     """
     if isinstance(a, int) and isinstance(b, int): return a == b
-    if isAst(a) or isAst(b): return (a == b).is_true()
+    if isAst(a) or isAst(b): return (canonicalizeAdd(a) == canonicalizeAdd(b)).is_true()
     raise ValueError("not sure what to do about {} and {} with types {} and {}".format(a,b,type(a),type(b)))
 
 def isDefinitelyEqual_Solver(state, a, b):

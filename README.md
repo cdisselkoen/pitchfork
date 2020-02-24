@@ -39,13 +39,10 @@ Pitchfork covers Spectre v1, Spectre v1.1, and Spectre v4.
     patched version of angr which we'll install next. But performing the typical
     angr install process ensures that all dependencies (Python and otherwise) for
     angr 8.19.4.5 are properly installed
-- Clone [our fork of angr](https://github.com/cdisselkoen/angr) _inside_ this `pitchfork` directory, then checkout its `more-hooks` branch:
+- Clone [our fork of angr](https://github.com/cdisselkoen/angr) _inside_ this `pitchfork` directory, checking out its `more-hooks` branch:
     ```bash
-    cd pitchfork
-    git clone https://github.com/cdisselkoen/angr
-    cd angr
-    git checkout more-hooks
-    cd ..
+    git clone https://github.com/cdisselkoen/angr -b more-hooks angr-git
+    ln -s angr-git/angr angr
     ```
     - We recommend cloning our angr fork inside this `pitchfork` directory so
     that Python automatically uses it instead of the pip-installed angr. If you
@@ -64,7 +61,7 @@ Pitchfork covers Spectre v1, Spectre v1.1, and Spectre v4.
 cases, our new Spectre v1 test cases, and our Spectre v1.1 test cases (see
 below).
 - Explanations of expected Kocher test results are in [kocher_analysis.txt](kocher_analysis.txt) (see also the new Spectre testcases)
-- To run other tests or workloads, look at the functions in [pitchfork.py](pitchfork.py)
+- To run other tests or workloads, look at the functions in [pitchfork.py](pitchfork.py) or [eval.py](eval.py)
 - Some useful utilities for interactive investigation are in [interactiveutils.py](interactiveutils.py) (imported with [pitchfork.py](pitchfork.py))
 
 # Our Spectre testcases

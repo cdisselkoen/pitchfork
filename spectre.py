@@ -9,16 +9,24 @@ from abstractdata import AbstractValue, AbstractPointer, AbstractPointerToUncons
 import logging
 l = logging.getLogger(name=__name__)
 
+import collections
+
 def armSpectreOOBChecks(proj,state):
     state.register_plugin('oob', OOBState(proj))
     state.register_plugin('spectre', SpectreOOBState())
     state.spectre.arm(state)
     assert state.spectre.armed()
 
-def armSpectreExplicitChecks(proj, state):
+def armSpectreExplicitChecks(proj, state, whitelist=None, trace=False, takepath=[]):
     args = state.globals['args']
     otherSecrets = state.globals['otherSecrets'] if 'otherSecrets' in state.globals else []
-    state.register_plugin('spectre', SpectreExplicitState(vars=args.values(), secretIntervals=otherSecrets))
+    state.register_plugin('spectre',
+        SpectreExplicitState(
+            vars=args.values(),
+            secretIntervals=otherSecrets,
+            whitelist=whitelist,
+            trace=trace,
+            takepath=takepath))
     state.spectre.arm(state)
     assert state.spectre.armed()
 
@@ -86,7 +94,9 @@ class SpectreExplicitState(angr.SimStatePlugin):
     This plugin does not rely on the OOB state plugin in any way.
     """
 
-    def __init__(self, vars=[], secretIntervals=[], armed=False):
+    _counter = 0
+
+    def __init__(self, vars=[], secretIntervals=[], whitelist=None, armed=False, trace=False, takepath=[]):
         """
         vars: Iterable of pairs (variable, AbstractValue) where the AbstractValue describes
             what parts of that variable and/or the memory it points to should be considered 'secret'.
@@ -95,6 +105,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
             denoting ranges of memory which should also be considered 'secret'.
             Both startaddr and endaddr can be either concrete addresses or BVS's.
             startaddr is inclusive, endaddr is exclusive.
+        whitelist: List of instruction addresses with known violations that should not be reported.
         armed: whether arm() has been called. Leave as False unless you're the copy constructor.
 
         Everything in memory is considered public by default except whatever is specified by
@@ -103,14 +114,37 @@ class SpectreExplicitState(angr.SimStatePlugin):
         super().__init__()
         self.vars = vars
         self._armed = armed
+        self._trace = trace
         self.secretIntervals = secretIntervals
+        if whitelist is None:
+            whitelist = []
+        self.whitelist = whitelist
+        self.takepath = collections.deque(takepath)
         self.violation = None
+
+        self.uid = self.uniqueId()
+        self.vex = None
+
+    @classmethod
+    def uniqueId(cls):
+        cls._counter += 1
+        return cls._counter
 
     @angr.SimStatePlugin.memo
     def copy(self, memo):
-        return SpectreExplicitState(vars=self.vars, secretIntervals=self.secretIntervals, armed=self._armed)
+        copied = SpectreExplicitState(
+            vars=self.vars,
+            secretIntervals=self.secretIntervals,
+            whitelist=self.whitelist,
+            armed=self._armed,
+            trace=self._trace,
+            takepath=self.takepath)
+        copied.vex = self.vex
+        if self._trace:
+            l.info("new state state{} copied from state{}".format(copied.uid, self.uid))
+        return copied
 
-    def arm(self, state):
+    def arm(self, state, trace=False):
         """
         Setup hooks and breakpoints to perform Spectre gadget vulnerability detection.
         Also set up concretization to ensure addresses always point to secret data when possible.
@@ -118,6 +152,18 @@ class SpectreExplicitState(angr.SimStatePlugin):
         if self._armed:
             l.warn("called arm() on already-armed SpectreExplicitState")
             return
+
+        if self._trace:
+            state.inspect.b('mem_read', when=angr.BP_AFTER, action=dbg_mem_read)
+            state.inspect.b('reg_read', when=angr.BP_AFTER, action=dbg_reg_read)
+            state.inspect.b('tmp_read', when=angr.BP_AFTER, action=dbg_tmp_read)
+            state.inspect.b('mem_write', when=angr.BP_AFTER, action=dbg_mem_write)
+            state.inspect.b('reg_write', when=angr.BP_AFTER, action=dbg_reg_write)
+            state.inspect.b('tmp_write', when=angr.BP_AFTER, action=dbg_tmp_write)
+            state.inspect.b('instruction', when=angr.BP_BEFORE, action=dbg_instr)
+            state.inspect.b('statement', when=angr.BP_BEFORE, action=dbg_stmt)
+            state.inspect.b('irsb', when=angr.BP_BEFORE, action=dbg_irsb)
+        state.inspect.b('instruction', when=angr.BP_BEFORE, condition=lambda state: state.inspect.instruction < 4096, action=segfault)
 
         state.inspect.b('mem_read',  when=angr.BP_AFTER, condition=_tainted_read, action=detected_spectre_read)
         state.inspect.b('mem_write', when=angr.BP_AFTER, condition=_tainted_write, action=detected_spectre_write)
@@ -137,7 +183,8 @@ class SpectreExplicitState(angr.SimStatePlugin):
             assert isinstance(val, AbstractValue)
             if val.value is not None: state.add_constraints(var == val.value)
             if val.secret:
-                raise ValueError("not implemented yet: secret arguments passed by value")
+                pass # XXX ?
+                #raise ValueError("not implemented yet: secret arguments passed by value")
             elif isinstance(val, AbstractPointer):
                 if val.cannotPointSecret: notSecretAddresses.append(var)
                 (mlayout, newStart) = memLayoutForPointee(var, val.pointee, secretStart, secretMustEnd)
@@ -164,6 +211,11 @@ class SpectreExplicitState(angr.SimStatePlugin):
 
         for (mn,mx) in self.secretIntervals:
             if isAst(mn):
+                # if mn is symbolic but based off a symbolic variable we already know about,
+                # then set secretStart to the evaluated expression
+                # this allows us to handle disjoint secret sections inside a struct
+                # that all have the same base offset
+                secretStart = state.solver.eval_one(mn, default=secretStart)
                 if state.solver.solution(mn, secretStart):
                     mn_as_int = secretStart
                     state.solver.add(mn == mn_as_int)
@@ -174,7 +226,7 @@ class SpectreExplicitState(angr.SimStatePlugin):
                     state.solver.add(mx == mx_as_int)
                     secretStart += length
                 else:
-                    raise ValueError("Can't resolve secret address {} to desired value {}".format(mn, secretStart))
+                    raise ValueError("Can't resolve secret address {} to desired value 0x{:x}".format(mn, secretStart))
             elif isAst(mx):
                 raise ValueError("not implemented yet: interval min {} is concrete but max {} is symbolic".format(mn, mx))
             else:
@@ -300,7 +352,22 @@ def normalizeIntervals(intervals):
     returns: new list of intervals
     """
     assert isinstance(intervals, list)
-    intervals.sort(key=lambda pair: -1 if (isAst(pair[0]) or isAst(pair[1])) else pair[0])  # sort all symbolic intervals to beginning, otherwise sort by low coordinate
+    def intervalkey(pair):
+        if isAst(pair[0]) and isAst(pair[1]):
+            lower = pair[0]
+            if lower.op == '__add__':
+                try:
+                    bvs = next(arg.args[0] for arg in lower.args if arg.op == 'BVS')
+                    bvv = next(arg.args[0] for arg in lower.args if arg.op == 'BVV')
+                    return (bvs, bvv)
+                except StopIteration:
+                    pass
+            elif lower.op == 'BVS':
+                return (lower.args[0], 0)
+        elif not isAst(pair[0]):
+            return ('\xff', pair[0])
+        return ('', -1)
+    intervals.sort(key=intervalkey)  # sort all symbolic intervals to beginning, otherwise sort by low coordinate
     newIntervals = []
     while intervals:
         interval = intervals.pop()  # gets the interval with largest max
@@ -308,12 +375,88 @@ def normalizeIntervals(intervals):
             prevInterval = intervals[-1]  # the interval before that
             while isDefinitelyEqual(prevInterval[1], interval[0]):  # this interval is contiguous with the previous interval
                 intervals.pop()  # remove prevInterval
-                interval[0] = prevInterval[0]  # `interval` now covers the entire range
+                interval = (prevInterval[0], interval[1])  # `interval` now covers the entire range
                 if not intervals: break  # no intervals left
                 prevInterval = intervals[-1]  # now compare with the interval before _that_
             # not contiguous with the previous interval
-        newIntervals.append(interval)
+        newIntervals.insert(0, interval)  # so that intervals don't get reversed
     return newIntervals
+
+def dbg_mem_read(state):
+    addr = state.inspect.mem_read_address
+    expr = state.inspect.mem_read_expr
+    l.info("state{}: read {} from addr {}".format(
+        state.spectre.uid,
+        describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        describeAst(addr)))
+
+def dbg_reg_read(state):
+    offset = state.inspect.reg_read_offset
+    expr = state.inspect.reg_read_expr
+    l.info("state{}: read {} from offset {}".format(
+        state.spectre.uid,
+        describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        offset))
+
+def dbg_tmp_read(state):
+    num = state.inspect.tmp_read_num
+    expr = state.inspect.tmp_read_expr
+    l.info("state{}: read {} from tmp {}".format(
+        state.spectre.uid,
+        describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        num))
+
+def dbg_mem_write(state):
+    addr = state.inspect.mem_write_address
+    expr = state.inspect.mem_write_expr
+    l.info("state{}: wrote {} to addr {}".format(
+        state.spectre.uid,
+        describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        describeAst(addr)))
+
+def dbg_reg_write(state):
+    offset = state.inspect.reg_write_offset
+    expr = state.inspect.reg_write_expr
+    l.info("state{}: wrote {} to offset {}".format(
+        state.spectre.uid,
+        describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        offset))
+
+def dbg_tmp_write(state):
+    num = state.inspect.tmp_write_num
+    expr = state.inspect.tmp_write_expr
+    l.info("state{}: wrote {} to tmp {}".format(
+        state.spectre.uid,
+        describeAst(expr),
+        #list(describeAst(leaf) for leaf in expr.leaf_asts()),
+        num))
+
+def segfault(state):
+    l.info('state{}: SEGMENTATION FAULT (addr {})'.format(state.spectre.uid, state.inspect.instruction))
+    state.solver.add(1 == 0)
+    #l.info("instruction {}".format(
+        #hex(state.inspect.instruction)))
+
+def dbg_instr(state):
+    block = state.block()
+    n = block.instruction_addrs.index(state.inspect.instruction)
+    l.info('state{}: \033[0m{}'.format(state.spectre.uid, block.capstone.insns[n]))
+    #l.info("instruction {}".format(
+        #hex(state.inspect.instruction)))
+
+def dbg_stmt(state):
+    stms = state.spectre.vex.statements
+    l.info('state{}: \033[0m{}'.format(state.spectre.uid, stms[state.inspect.statement]))
+    #l.info(block.vex.statements[state.inspect.statement - 1])
+
+def dbg_irsb(state):
+    state.spectre.vex = state.block().vex
+    #state.spectre.vex.pp()
 
 # Call during a breakpoint callback on 'mem_read'
 def _tainted_read(state):
@@ -352,28 +495,55 @@ def _can_point_to_secret(state, ast):
     return False  # ast cannot point to secret
 
 def detected_spectre_read(state):
-    print("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Instruction Address {}\n  Read Address {}\n  Read Value {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
+    if isinstance(state.spectre, SpectreExplicitState):
+        if state.addr in state.spectre.whitelist:
+            l.info("Detected whitelisted unsafe read:\n  Instruction Address {}\n  Read Address {}\n  Read Value {}".format(
+                hex(state.addr),
+                describeAst(state.inspect.mem_read_address),
+                describeAst(state.inspect.mem_read_expr)))
+            return
+    path = ''.join(state.spec.path) if state.has_plugin('spec') else 'not available'
+    l.error("\n!!!!!!!! UNSAFE READ !!!!!!!!\n  Instruction Address {}\n  Read Address {}\n  Read Value {}\n  Path {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
         hex(state.addr),
         describeAst(state.inspect.mem_read_address),
         describeAst(state.inspect.mem_read_expr),
+        path,
         {name: state.solver.eval(bvs) for (name, (bvs, _)) in state.globals['args'].items()},
         state.solver.constraints))
     state.spectre.violation = ('read', state.addr, state.inspect.mem_read_address, state.inspect.mem_read_expr)
 
 def detected_spectre_write(state):
-    print("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Instruction Address {}\n  Write Address {}\n  Write Value {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
+    if isinstance(state.spectre, SpectreExplicitState):
+        if state.addr in state.spectre.whitelist:
+            l.info("Detected whitelisted unsafe write:\n  Instruction Address {}\n  Write Address {}\n  Write Value {}".format(
+                hex(state.addr),
+                describeAst(state.inspect.mem_write_address),
+                describeAst(state.inspect.mem_write_expr)))
+            return
+    path = ''.join(state.spec.path) if state.has_plugin('spec') else 'not available'
+    l.error("\n!!!!!!!! UNSAFE WRITE !!!!!!!!\n  Instruction Address {}\n  Write Address {}\n  Write Value {}\n  Path {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
         hex(state.addr),
         describeAst(state.inspect.mem_write_address),
         describeAst(state.inspect.mem_write_expr),
+        path,
         {name: state.solver.eval(bvs) for (name, (bvs, _)) in state.globals['args'].items()},
         state.solver.constraints))
     state.spectre.violation = ('write', state.addr, state.inspect.mem_write_address, state.inspect.mem_write_expr)
 
 def detected_spectre_branch(state):
-    print("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Branch Address {}\n  Branch Target {}\n  Guard {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
+    if isinstance(state.spectre, SpectreExplicitState):
+        if state.addr in state.spectre.whitelist:
+            l.info("Detected whitelisted unsafe branch:\n  Instruction Address {}\n  Branch Target {}\n  Guard {}".format(
+                hex(state.addr),
+                state.inspect.exit_target,
+                describeAst(state.inspect.exit_guard)))
+            return
+    path = ''.join(state.spec.path) if state.has_plugin('spec') else 'not available'
+    l.error("\n!!!!!!!! UNSAFE BRANCH !!!!!!!!\n  Instruction Address {}\n  Branch Target {}\n  Guard {}\n  Path {}\n  A set of argument values meeting constraints is: {}\n  constraints were {}\n".format(
         hex(state.addr),
         state.inspect.exit_target,
         describeAst(state.inspect.exit_guard),
+        path,
         {name: state.solver.eval(bvs) for (name, (bvs, _)) in state.globals['args'].items()},
         state.solver.constraints))
     state.spectre.violation = ('branch', state.addr, state.inspect.exit_target, state.inspect.exit_guard)

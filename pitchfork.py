@@ -538,7 +538,7 @@ def describeActiveStates(simgr):
 
 # 'Driver' functions
 
-def _spectreSimgr(getProjState, getProjStateArgs, funcname, checks, spec=True, window=None, misforwarding=False, run=True):
+def _spectreSimgr(getProjState, getProjStateArgs, funcname, checks, spec=True, window=None, misforwarding=False, run=True, whitelist=None, trace=False, takepath=[]):
     """
     getProjState: a function which, when called with getProjStateArgs, produces a pair (proj, state)
     getProjStateArgs: list of arguments to pass to the getProjState function
@@ -553,7 +553,7 @@ def _spectreSimgr(getProjState, getProjStateArgs, funcname, checks, spec=True, w
     l.info("Running {} {} speculative execution".format(funcname, "with" if spec else "without"))
     proj,state = getProjState(*getProjStateArgs)
     if checks == 'OOB': armSpectreOOBChecks(proj,state)
-    elif checks == 'explicit': armSpectreExplicitChecks(proj,state)
+    elif checks == 'explicit': armSpectreExplicitChecks(proj,state,whitelist,trace,takepath)
     else: raise ValueError("Expected `checks` to be either 'OOB' or 'explicit', got {}".format(checks))
     simgr = getSimgr(proj, state, spec=spec, window=window, misforwarding=misforwarding)
     if run: return runSimgr(simgr)
@@ -765,13 +765,25 @@ def alltests(kocher=True, spectrev1=True, forwarding=True, tweetnacl=True):
     def violationDetected(simgr):
         return 'spectre_violation' in simgr.stashes and len(simgr.spectre_violation) > 0
     def kocher_testResult(s):
-        return ("FAIL: detected a violation without speculative execution" if violationDetected(kocher_notspec[s])
-            else "FAIL: no violation detected" if not violationDetected(kocher_spec[s])
-            else "PASS")
+        if s == '08':
+            # Test case '08' should not report any violations, because it compiles to a 'cmov' instruction on x86 and is constant-time
+            return ("FAIL: detected a violation without speculative execution" if violationDetected(kocher_notspec[s])
+                    else "FAIL: detected a violation, expected no violation" if violationDetected(kocher_spec[s])
+                    else "PASS")
+        else:
+            return ("FAIL: detected a violation without speculative execution" if violationDetected(kocher_notspec[s])
+                else "FAIL: no violation detected" if not violationDetected(kocher_spec[s])
+                else "PASS")
     def spectrev1_testResult(s):
-        return ("FAIL: detected a violation without speculative execution" if violationDetected(spectrev1_notspec[s])
-            else "FAIL: no violation detected" if not violationDetected(spectrev1_spec[s])
-            else "PASS")
+        if s == '08':
+            # Test case '08' should not report any violations, because it compiles to a 'cmov' instruction on x86 and is constant-time
+            return ("FAIL: detected a violation without speculative execution" if violationDetected(spectrev1_notspec[s])
+                    else "FAIL: detected a violation, expected no violation" if violationDetected(spectrev1_spec[s])
+                    else "PASS")
+        else:
+            return ("FAIL: detected a violation without speculative execution" if violationDetected(spectrev1_notspec[s])
+                else "FAIL: no violation detected" if not violationDetected(spectrev1_spec[s])
+                else "PASS")
     def forwarding_testResult(s):
         return ("FAIL: detected a violation without speculative execution" if violationDetected(forwarding_notspec[s])
             else "FAIL: detected a violation without misforwarding" if violationDetected(forwarding_spec[s])
