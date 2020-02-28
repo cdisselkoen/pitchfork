@@ -757,7 +757,6 @@ def alltests(kocher=True, spectrev1=True, forwarding=True, tweetnacl=True):
         spectrev1_spec = runallSpectrev1(spec=True)
     if forwarding:
         forwarding_notspec = runallForwarding(spec=False)
-        forwarding_spec = runallForwarding(spec=True, misforwarding=False)
         forwarding_forwarding = runallForwarding(spec=True, misforwarding=True)
     if tweetnacl:
         tweetnacl_notspec = runallTweetNacl(spec=False)
@@ -786,7 +785,6 @@ def alltests(kocher=True, spectrev1=True, forwarding=True, tweetnacl=True):
                 else "PASS")
     def forwarding_testResult(s):
         return ("FAIL: detected a violation without speculative execution" if violationDetected(forwarding_notspec[s])
-            else "FAIL: detected a violation without misforwarding" if violationDetected(forwarding_spec[s])
             else "FAIL: no violation detected" if not violationDetected(forwarding_forwarding[s])
             else "PASS")
     def tweetnacl_testResult(s):
@@ -795,7 +793,7 @@ def alltests(kocher=True, spectrev1=True, forwarding=True, tweetnacl=True):
             else "no violation detected")
     kocher_results = {k:kocher_testResult(k) for k in kocher_spec.keys()} if kocher else None
     spectrev1_results = {k:spectrev1_testResult(k) for k in spectrev1_spec.keys()} if spectrev1 else None
-    forwarding_results = {k:forwarding_testResult(k) for k in forwarding_spec.keys()} if forwarding else None
+    forwarding_results = {k:forwarding_testResult(k) for k in forwarding_forwarding.keys()} if forwarding else None
     tweetnacl_results = {k:tweetnacl_testResult(k) for k in tweetnacl_spec.keys()} if tweetnacl else None
     if kocher and not spectrev1 and not forwarding and not tweetnacl:
         print("Kocher tests:")
