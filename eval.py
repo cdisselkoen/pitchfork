@@ -434,7 +434,7 @@ if __name__ == '__main__':
     fname = rvals[2]
     whitelist = rvals[3]
     path = ''
-    if not args.guided:
+    if args.guided:
         if len(rvals) > 4:
             path = rvals[4]
         if not path:
