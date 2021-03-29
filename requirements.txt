@@ -35,7 +35,7 @@ psutil==5.6.6
 ptyprocess==0.6.0
 pycparser==2.19
 pyelftools==0.25
-Pygments==2.4.2
+Pygments==2.7.4
 PySMT==0.8.0
 pyvex==8.19.4.5
 readline==6.2.4.1
