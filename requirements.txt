@@ -30,7 +30,7 @@ pickleshare==0.7.5
 plumbum==1.6.7
 progressbar==2.5
 prompt-toolkit==2.0.10
-protobuf==3.10.0
+protobuf==3.15.0
 psutil==5.6.6
 ptyprocess==0.6.0
 pycparser==2.19
